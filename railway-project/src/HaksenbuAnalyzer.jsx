@@ -3635,6 +3635,27 @@ export default function HaksenbuAnalyzer() {
             + '<span style="min-width:18px;height:18px;border-radius:5px;background:#1565C0;color:#fff;font-size:9px;font-weight:800;display:flex;align-items:center;justify-content:center">'+(i+1)+'</span>'
             + '<span style="font-size:10px;color:#374151;line-height:1.5">'+t+'</span></div>';
         }).join("");
+      // AI 경로에서도 동일한 전과목 subjectSections 사용
+      const aiEnsure3 = (arr, db, start) => (arr && arr.length >= 3) ? arr.slice(0,3) : db.slice(start, start+3);
+      const aiPrintIsSci = !["사회","인문","교육"].some(t => (rec.majorType||"").includes(t));
+      const aiMakeItem = (t,i,bg,num) => '<div style="padding:8px 12px;border-bottom:1px solid '+bg+'40;display:flex;gap:8px;align-items:flex-start"><span style="min-width:18px;height:18px;border-radius:5px;background:'+num+';color:#fff;font-size:9px;font-weight:800;display:flex;align-items:center;justify-content:center">'+(i+1)+'</span><span style="font-size:10px;color:#374151;line-height:1.5">'+t+'</span></div>';
+      const aiMakeBox = (label,emoji,items,hBg,hBdr,lc) => {
+        if (!items||!items.length) return '';
+        return '<div style="border:1.5px solid '+hBdr+';border-radius:10px;overflow:hidden"><div style="padding:9px 12px;background:'+hBg+';border-bottom:1.5px solid '+hBdr+';display:flex;justify-content:space-between;align-items:center"><span style="font-weight:800;font-size:11px;color:'+lc+'">'+emoji+' '+label+'</span><span style="font-size:10px;color:'+lc+';background:#fff;border:1px solid '+hBdr+';padding:2px 6px;border-radius:8px">3개</span></div>'+items.slice(0,3).map((t,i)=>aiMakeItem(t,i,hBdr,lc)).join('')+'</div>';
+      };
+      const aiSciBoxes = aiPrintIsSci ? [
+        aiMakeBox('생명과학1','📗',aiEnsure3(rec.생명과학1||[],BIO_TOPICS,0),'#F0FFF4','#A7F3D0','#2E7D32'),
+        aiMakeBox('화학1','🧪',aiEnsure3(rec.화학1||[],CHEM_TOPICS,0),'#EFF6FF','#BFDBFE','#1565C0'),
+        aiMakeBox('물리학1','⚡',aiEnsure3(rec.물리학1||[],PHYSICS_TOPICS,0),'#F5F3FF','#DDD6FE','#7C3AED'),
+        aiMakeBox('지구과학1','🌍',aiEnsure3(rec.지구과학1||[],EARTH_TOPICS,0),'#FFFBEB','#FDE68A','#B45309'),
+      ].filter(Boolean) : [aiMakeBox('사회','🌏',aiEnsure3(rec.통합사회||[],SOC_TOPICS,0),'#FFFBEB','#FDE68A','#D97706')];
+      const aiAllSections = [
+        ...aiSciBoxes,
+        aiMakeBox('국어','📖',aiEnsure3(rec.국어||[],KOR_TOPICS,0),'#FEF2F2','#FECACA','#DC2626'),
+        aiMakeBox('수학','📐',aiEnsure3(rec.수학||[],MATH_TOPICS,7),'#EFF6FF','#BFDBFE','#1D4ED8'),
+        aiPrintIsSci ? aiMakeBox('사회','🌏',aiEnsure3(rec.통합사회||[],SOC_TOPICS,44),'#FFFBEB','#FDE68A','#D97706') : null,
+        aiMakeBox('영어','🔤',aiEnsure3(rec.영어||[],ENG_TOPICS,0),'#E0F2FE','#BAE6FD','#0277BD'),
+      ].filter(Boolean).join('');
       recommendHtml = `
   <div class="page-section">
     <div class="page-header">⭐ 4페이지 · 아펙스 컨설팅팀 추천 탐구주제</div>
@@ -3645,20 +3666,7 @@ export default function HaksenbuAnalyzer() {
     <div style="margin-top:20px;border-top:1.5px solid #E5E7EB;padding-top:16px">
       <div style="font-weight:800;font-size:12px;color:#374151;margin-bottom:10px">📚 모든에듀 세특 가이드북 기반 추가 추천</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-        <div style="border:1.5px solid #D1FAE5;border-radius:10px;overflow:hidden">
-          <div style="padding:8px 12px;background:#F0FFF4;border-bottom:1.5px solid #D1FAE5;display:flex;justify-content:space-between;align-items:center">
-            <span style="font-weight:800;font-size:11px;color:#2E7D32">📗 생명과학1</span>
-            <span style="font-size:10px;color:#2E7D32;background:#fff;border:1px solid #A7F3D0;padding:2px 6px;border-radius:8px">${rec.생명과학1.length}개</span>
-          </div>
-          ${aiBioItems || '<div style="padding:16px;text-align:center;color:#9CA3AF;font-size:10px">매칭 없음</div>'}
-        </div>
-        <div style="border:1.5px solid #BFDBFE;border-radius:10px;overflow:hidden">
-          <div style="padding:8px 12px;background:#EFF6FF;border-bottom:1.5px solid #BFDBFE;display:flex;justify-content:space-between;align-items:center">
-            <span style="font-weight:800;font-size:11px;color:#1565C0">🧪 화학1</span>
-            <span style="font-size:10px;color:#1565C0;background:#fff;border:1px solid #BFDBFE;padding:2px 6px;border-radius:8px">${rec.화학1.length}개</span>
-          </div>
-          ${aiChemItems || '<div style="padding:16px;text-align:center;color:#9CA3AF;font-size:10px">매칭 없음</div>'}
-        </div>
+        ${aiAllSections}
       </div>
     </div>
   </div>`;
