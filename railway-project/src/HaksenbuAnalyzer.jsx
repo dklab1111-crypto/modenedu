@@ -2342,8 +2342,8 @@ ${evalTip}
 JSON만 출력(마크다운 없이):
 {"topics":[{"title":"탐구주제명","subject":"관련과목","type":"실험/이론/융합","tip":"이 주제가 ${major}에 왜 효과적인지 한 줄","level":"기본/심화/최심화"}]}`;
 
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method:"POST", headers:{"Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-ipc":"true"},
+      const res = await fetch("/api/claude", {
+        method:"POST", headers:{"Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01"},
         body: JSON.stringify({
           model:"claude-sonnet-4-5-20250929", max_tokens:1500,
           system:`당신은 모든에듀 아펙스 컨설팅팀 소속 학생부종합전형 세특 전문 컨설턴트입니다. ${계열} 계열 전문가로서 실제 입시에서 효과적인 탐구주제를 추천합니다. 순수 JSON만 출력하세요.`,
@@ -3586,8 +3586,8 @@ export default function HaksenbuAnalyzer() {
         const autoTimer = setTimeout(() => autoCtrl.abort(), 30000);
         let autoRes;
         try {
-          autoRes = await fetch("https://api.anthropic.com/v1/messages", {
-            method:"POST", headers:{"Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-ipc":"true"},
+          autoRes = await fetch("/api/claude", {
+            method:"POST", headers:{"Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01"},
             signal: autoCtrl.signal,
             body: JSON.stringify({
               model:"claude-sonnet-4-5-20250929", max_tokens:1000,
@@ -4144,8 +4144,8 @@ export default function HaksenbuAnalyzer() {
     const currLabel = curriculum === "2022" ? "2022개정(고1·고2)" : "2015개정(고3·N수)";
     const sys = systemPrompt; // useMemo 캐시
     try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method:"POST", headers:{"Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-ipc":"true"},
+      const res = await fetch("/api/claude", {
+        method:"POST", headers:{"Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01"},
         body: JSON.stringify({ model:"claude-sonnet-4-5-20250929", max_tokens:6000, system:sys,
           messages:[{role:"user",content:[
             {type:"document",source:{type:"base64",media_type:"application/pdf",data:pdfBase64}},
