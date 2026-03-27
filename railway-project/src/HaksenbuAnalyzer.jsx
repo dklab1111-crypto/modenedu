@@ -2342,8 +2342,8 @@ ${evalTip}
 JSON만 출력(마크다운 없이):
 {"topics":[{"title":"탐구주제명","subject":"관련과목","type":"실험/이론/융합","tip":"이 주제가 ${major}에 왜 효과적인지 한 줄","level":"기본/심화/최심화"}]}`;
 
-      const res = await fetch("/api/claude", {
-        method:"POST", headers:{"Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01"},
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method:"POST", headers:{"Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-ipc":"true"},
         body: JSON.stringify({
           model:"claude-sonnet-4-5-20250929", max_tokens:1500,
           system:`당신은 모든에듀 아펙스 컨설팅팀 소속 학생부종합전형 세특 전문 컨설턴트입니다. ${계열} 계열 전문가로서 실제 입시에서 효과적인 탐구주제를 추천합니다. 순수 JSON만 출력하세요.`,
@@ -3586,8 +3586,8 @@ export default function HaksenbuAnalyzer() {
         const autoTimer = setTimeout(() => autoCtrl.abort(), 30000);
         let autoRes;
         try {
-          autoRes = await fetch("/api/claude", {
-            method:"POST", headers:{"Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01"},
+          autoRes = await fetch("https://api.anthropic.com/v1/messages", {
+            method:"POST", headers:{"Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-ipc":"true"},
             signal: autoCtrl.signal,
             body: JSON.stringify({
               model:"claude-sonnet-4-5-20250929", max_tokens:1000,
@@ -3704,26 +3704,26 @@ export default function HaksenbuAnalyzer() {
             +'<span style="font-size:10px;color:'+labelColor+';background:#fff;border:1px solid '+headerBorder+';padding:2px 6px;border-radius:8px">3개</span>'
             +'</div>'+rows+'</div>';
         };
+        // 각 과목 최소 3개 보장 (빈 배열이면 DB에서 직접 추출)
+        const ensure3 = (arr, db, start) => (arr && arr.length >= 3) ? arr.slice(0,3) : db.slice(start, start+3);
         // 이과: 생명/화학/물리/지구 분리 | 문과: 사회 통합
         const sciSections = printIsSci ? [
-          makeBox3('생명과학1','📗', ensure3(rec.생명과학1,BIO_TOPICS,0),'#F0FFF4','#A7F3D0','#2E7D32'),
-          makeBox3('화학1','🧪', ensure3(rec.화학1,CHEM_TOPICS,0),'#EFF6FF','#BFDBFE','#1565C0'),
+          makeBox3('생명과학1','📗', ensure3(rec.생명과학1||[],BIO_TOPICS,0),'#F0FFF4','#A7F3D0','#2E7D32'),
+          makeBox3('화학1','🧪', ensure3(rec.화학1||[],CHEM_TOPICS,0),'#EFF6FF','#BFDBFE','#1565C0'),
           makeBox3('물리학1','⚡', ensure3(rec.물리학1||[],PHYSICS_TOPICS,0),'#F5F3FF','#DDD6FE','#7C3AED'),
           makeBox3('지구과학1','🌍', ensure3(rec.지구과학1||[],EARTH_TOPICS,0),'#FFFBEB','#FDE68A','#B45309'),
         ].filter(Boolean) : [
           makeBox3('사회','🌏', ensure3(rec.통합사회||[],SOC_TOPICS,0),'#FFFBEB','#FDE68A','#D97706'),
         ];
-        // 각 과목 최소 3개 보장 (빈 배열이면 DB에서 직접 추출)
-        const ensure3 = (arr, db, start) => (arr && arr.length >= 3) ? arr.slice(0,3) : db.slice(start, start+3);
-        const korItems  = ensure3(rec.국어, KOR_TOPICS, 0);
-        const mathItems = ensure3(rec.수학, MATH_TOPICS, 7);
-        const socItems  = ensure3(rec.통합사회, SOC_TOPICS, printIsSci ? 44 : 0);
-        const engItems  = ensure3(rec.영어, ENG_TOPICS, 0);
+        const korItems  = ensure3(rec.국어||[], KOR_TOPICS, 0);
+        const mathItems = ensure3(rec.수학||[], MATH_TOPICS, 7);
+        const socItems  = ensure3(rec.통합사회||[], SOC_TOPICS, printIsSci ? 44 : 0);
+        const engItems  = ensure3(rec.영어||[], ENG_TOPICS, 0);
         const subjectSections = [
           ...sciSections,
           makeBox3('국어','📖', korItems,'#FEF2F2','#FECACA','#DC2626'),
           makeBox3('수학','📐', mathItems,'#EFF6FF','#BFDBFE','#1D4ED8'),
-          printIsSci ? makeBox3('사회','🌏', socItems,'#FFFBEB','#FDE68A','#D97706') : '',
+          printIsSci ? makeBox3('사회','🌏', socItems,'#FFFBEB','#FDE68A','#D97706') : null,
           makeBox3('영어','🔤', engItems,'#E0F2FE','#BAE6FD','#0277BD'),
         ].filter(s=>s).join('');
       recommendHtml = `
@@ -4136,8 +4136,8 @@ export default function HaksenbuAnalyzer() {
     const currLabel = curriculum === "2022" ? "2022개정(고1·고2)" : "2015개정(고3·N수)";
     const sys = systemPrompt; // useMemo 캐시
     try {
-      const res = await fetch("/api/claude", {
-        method:"POST", headers:{"Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01"},
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method:"POST", headers:{"Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-ipc":"true"},
         body: JSON.stringify({ model:"claude-sonnet-4-5-20250929", max_tokens:6000, system:sys,
           messages:[{role:"user",content:[
             {type:"document",source:{type:"base64",media_type:"application/pdf",data:pdfBase64}},
