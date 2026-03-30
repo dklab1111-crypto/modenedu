@@ -3410,14 +3410,23 @@ export default function HaksenbuAnalyzer() {
         + '</tr>';
     }).join("");
 
-    // keywords 안전하게 추출
-    const kwList = Array.isArray(data.keywords) ? data.keywords : [];
+    // keywords 안전하게 추출 + source_text 검증 필터
+    const kwListRaw = Array.isArray(data.keywords) ? data.keywords : [];
+    const kwList = kwListRaw.filter(k => {
+      const id = (k.id || k.text || k.name || "").trim();
+      const src = (k.source_text || "").trim();
+      if (!id) return false;
+      if (!src || src.length < 5) return false;          // 증거 없음 → 제거
+      if (src === id) return false;                       // 키워드 자체만 반복 → 제거
+      if (src.length < id.length) return false;          // id보다 짧으면 이상 → 제거
+      return true;
+    });
     const keywords = kwList.length > 0
       ? kwList.map(k => {
           const cls = k.major_related ? "kw-major" : "kw-normal";
           const txt = k.id || k.text || k.name || "?";
           const star = k.major_related ? " ★" : "";
-          return '<span class="' + cls + '">' + txt + star + '</span>';
+          return '<span class="' + cls + '" title="' + (k.source_text||"").replace(/"/g,"'") + '">' + txt + star + '</span>';
         }).join(" ")
       : "<span style='color:#9CA3AF;font-size:13px'>키워드가 추출되지 않았습니다.</span>";
 
@@ -4105,7 +4114,8 @@ export default function HaksenbuAnalyzer() {
       + (projKeywords || "") + majorKwPool
       + "\n\n응답 JSON 키: keywords(배열), links(배열), summary(객체), grades(객체)"
       + "\nkeywords 규칙: ⚠️최우선규칙⚠️ 학생부 원문 텍스트를 한 줄씩 읽으면서 [키워드 고정 풀]에 있는 단어가 그 줄에 실제로 보이면 선택. 보이지 않으면 절대 선택 금지. 추론·연상·유추 금지. 전공명을 보고 관련 단어 추가 금지. 추상어(분석,탐구,연구,학습,이해,역량,활동,발표) 절대금지. 위반 시 결과 전체 무효."
-      + "\nkeywords 각 항목: id(풀에서 선택한 키워드 또는 세특 등장 전문용어), subject(해당 세특 과목명), cluster(풀의 클러스터명 사용), size(15~30), major_related(불리언)"
+      + "\n⚠️ [증거 필수] keywords 각 항목에 source_text를 반드시 포함. source_text는 해당 키워드가 등장하는 원문 문장 10~30자를 그대로 복사한 것. 키워드 단어 자체만 쓰는 것 금지. source_text를 제시할 수 없으면 그 키워드는 선택 금지."
+      + "\nkeywords 각 항목: id(풀에서 선택한 키워드 또는 세특 등장 전문용어), subject(해당 세특 과목명), cluster(풀의 클러스터명 사용), size(15~30), major_related(불리언), source_text(원문에서 해당 키워드가 포함된 문장 10~30자 직접 인용)"
       + "\nlinks: 같은 탐구/실험에서 함께 등장한 키워드끼리 연결. source·target은 반드시 keywords의 id값만 사용."
       + "\nlinks 각 항목: source(키워드id), target(키워드id), strength(0.3~1.0 - 세특에서 함께 등장한 빈도 기반)"
       + "\nsummary 키: 탐구주제, 활동경험, 독서 (각 배열, 항목당 title/subject/major_fit/description)"
@@ -4123,7 +4133,8 @@ export default function HaksenbuAnalyzer() {
       + "\n※ major_fit 판정은 추출된 원문 표현을 바꾸지 않고 점수만 매기는 것. 추출 단계와 완전 분리."
       + "\ngrades 키: summary(문자열), subject_grades(배열)"
       + "\nsubject_grades 각 항목: {subject:과목명, year:학년(1/2/3), semester:학기(1/2), grade:석차등급(1~9 정수 / 5등급제 과목은 1~5), units:단위수(정수), trend:up/down/stable}"
-      + "\n⚠️ [컬럼 혼동 금지] 학생부 성적표 컬럼 순서: 교과|과목|학점|원점수/과목평균|성취도|성취도별분포비율|석차등급|수강자수. grade는 반드시 맨 오른쪽 '석차등급' 컬럼 값(1~9 숫자, 5등급제 과목은 1~5). '학점' 컬럼(단위수, 보통 2~4)을 grade로 절대 입력하지 말 것. 예: 학점=4, 석차등급=3이면 grade:3, units:4 가 맞음."
+      + "\n⚠️ [컬럼 혼동 금지] 학생부 성적표에는 두 종류의 표가 있다. ①일반과목 표(석차등급 있음): 학기|교과|과목|학점수|원점수|성취도(수강자수)|석차등급|비고 — 이 표만 grade 추출 대상. 예: 학점수=4, 석차등급=3이면 grade:3, units:4. ②진로선택과목 표(석차등급 없음): 학기|교과|과목|학점수|원점수|성취도|성취도별분포비율|비고 — 이 표는 석차등급 컬럼 자체가 없으므로 grade 추출 대상 아님. '성취도별분포비율'을 석차등급으로 절대 혼동하지 말 것."
+      + "\n⚠️ [1학기·2학기 병합 금지] 국어·수학·영어 등 양 학기 모두 수강하는 과목은 반드시 1학기(semester:1)와 2학기(semester:2) 두 개 항목으로 분리 추출. 동일 과목을 단위수 합산(예: units:8)한 단일 항목으로 합치는 것은 오류다. 예: 국어 1학기 4단위+2학기 4단위 → {subject:'국어',year:1,semester:1,units:4,...}, {subject:'국어',year:1,semester:2,units:4,...} 두 항목이 맞음."
       + "\n⚠️⚠️ [성적 추출 최우선] 성적표 데이터가 가장 중요합니다. 반드시 모든 과목의 석차등급을 추출하세요. 빈 등급란도 해당 과목 행이 실제로 있으면 포함하세요."
       + "\n⚠️ [페이지 분리 주의] 성적표 테이블은 PDF 페이지 경계에서 잘릴 수 있다. 다음 페이지에서 표 헤더 없이 과목 행이 이어지면 이전 페이지와 동일한 학년·학기 테이블이 계속되는 것이므로 반드시 포함. 어떤 과목도 누락하지 말 것."
       + "\n⚠️ [2022개정 학기 배정 핵심 규칙] 학생부 성적표에서 '학기' 컬럼의 값(1 또는 2)은 반드시 semester 필드에 넣어야 한다. year 필드는 해당 표가 속한 학년(1학년=1, 2학년=2, 3학년=3)이다. 학기 컬럼 값을 year로 쓰지 말 것. 예: 1학년 성적표에서 학기2행의 과목 → year:1, semester:2"
