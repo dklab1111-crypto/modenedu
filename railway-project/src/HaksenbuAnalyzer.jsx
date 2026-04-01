@@ -4522,7 +4522,7 @@ export default function HaksenbuAnalyzer() {
             <div style={{display:"inline-flex",alignItems:"center",gap:8,background:"#EFF6FF",border:"1px solid #BFDBFE",borderRadius:20,padding:"6px 18px",marginBottom:16}}>
               <span style={{color:"#1D4ED8",fontSize:12,fontWeight:700}}>모든에듀 AI 학생부 분석 시스템</span>
             </div>
-            <h1 style={{margin:"0 0 12px",fontSize:34,fontWeight:900,color:"#111827",lineHeight:1.2,letterSpacing:"-0.03em"}}>키워드 네트워크 분석기</h1>
+            <h1 style={{margin:"0 0 12px",fontSize:34,fontWeight:900,color:"#111827",lineHeight:1.2,letterSpacing:"-0.03em"}}>키워드 네트워크 분석기 <span style={{fontSize:13,fontWeight:700,color:"#fff",background:"#1D4ED8",borderRadius:6,padding:"2px 8px",verticalAlign:"middle",letterSpacing:0}}>v18</span></h1>
             <p style={{color:"#6B7280",fontSize:14,lineHeight:1.85,margin:0}}>학생부 PDF를 업로드하면 AI가 핵심 키워드를 추출하고<br/>목표 전공 기반 네트워크로 시각화합니다</p>
           </div>
           <div style={{background:"#fff",border:"1.5px solid #E5EDF5",borderRadius:20,padding:"34px 30px",boxShadow:"0 6px 30px rgba(0,0,0,0.08)"}}>
