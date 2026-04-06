@@ -4269,15 +4269,13 @@ export default function HaksenbuAnalyzer() {
     }).join('');
     const evalKernel = getCategory열(major);
     const evalTipText = evalKernel && 계열_EVAL_TIPS[evalKernel] ? 계열_EVAL_TIPS[evalKernel] : '';
+    const evalBarsHtml2 = evalItemsP.map(function(item){
+      const p=item.score/item.max*100;
+      const col=p>=80?"#15803D":p>=60?"#1565C0":p>=40?"#D97706":"#DC2626";
+      return '<div style="flex:1;background:#F8FAFC;border-radius:8px;padding:8px 10px;border:1px solid '+col+'30">'        +'<div style="font-size:10px;font-weight:700;color:#374151;margin-bottom:4px">'+item.icon+' '+item.label+'</div>'        +'<div style="font-size:13px;font-weight:900;color:'+col+'">'+item.score+'<span style="font-size:9px;color:#9CA3AF">/'+item.max+'</span></div>'        +'<div style="background:#E5E7EB;border-radius:3px;height:4px;margin-top:4px"><div style="width:'+p+'%;height:100%;background:'+col+';border-radius:3px"></div></div>'        +'<div style="font-size:9px;color:'+col+';font-weight:600;margin-top:3px">'+item.comment+'</div>'        +'<div style="font-size:9px;color:#9CA3AF;margin-top:1px">'+item.desc+'</div>'        +'</div>';
+    }).join('');
     const evalSectionHtml =
-      '<div style="background:#fff;border:1.5px solid #E5E7EB;border-radius:12px;padding:14px 18px;margin-bottom:12px">'
-      +'<div style="display:flex;align-items:center;gap:10;margin-bottom:12px">'
-        +'<span style="font-size:14px">🏅</span>'
-        +'<span style="font-weight:800;font-size:13px;color:#111827">학생부 종합 평가</span>'
-        +'<span style="background:'+evalOverallColor+'18;color:'+evalOverallColor+';border:1.5px solid '+evalOverallColor+'40;font-size:11px;font-weight:800;padding:2px 10px;border-radius:16px;margin-left:6px">'+evalOverallLabel+'</span>'
-        +'<span style="margin-left:auto;font-size:20px;font-weight:900;color:'+evalOverallColor+'">'+evalPct+'<span style="font-size:11px;font-weight:600">점</span></span>'
-      +'</div>'
-      +'<div style="background:#EFF6FF;border:2px solid #1565C0;border-radius:10px;padding:12px 14px;margin-top:4px">'        +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'          +'<span style="font-size:14px">🎯</span>'          +'<span style="font-weight:900;font-size:13px;color:#1565C0">전형 전략 추천</span>'          +'<span style="background:#1565C0;color:#fff;font-size:11px;font-weight:800;padding:2px 11px;border-radius:20px;margin-left:4px">종합형 우선 추천</span>'        +'</div>'        +'<div style="font-size:11px;color:#1E3A8A;line-height:1.9;font-weight:500">'          +'탐구 깊이와 성장 서사가 모두 탄탄합니다. 학종(종합전형)에서 경쟁력이 높습니다.<br>'          +'세특 탐구를 추가 보완하면 <strong>최상위권 종합전형 도전</strong>이 가능합니다.'        +'</div>'      +'</div>'
+      '<div style="background:#fff;border:1.5px solid #E5E7EB;border-radius:12px;padding:14px 18px;margin-bottom:12px">'      +'<div style="display:flex;align-items:center;gap:10;margin-bottom:12px">'        +'<span style="font-size:14px">🏅</span>'        +'<span style="font-weight:800;font-size:13px;color:#111827">학생부 종합 평가</span>'        +'<span style="background:'+evalOverallColor+'18;color:'+evalOverallColor+';border:1.5px solid '+evalOverallColor+'40;font-size:11px;font-weight:800;padding:2px 10px;border-radius:16px;margin-left:6px">'+evalOverallLabel+'</span>'        +'<span style="margin-left:auto;font-size:20px;font-weight:900;color:'+evalOverallColor+'">'+evalPct+'<span style="font-size:11px;font-weight:600">점</span></span>'      +'</div>'      +'<div style="display:flex;gap:8px;margin-bottom:12px">'+evalBarsHtml2+'</div>'      +'<div style="background:#EFF6FF;border:2px solid #1565C0;border-radius:10px;padding:12px 14px;margin-top:4px">'        +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'          +'<span style="font-size:14px">🎯</span>'          +'<span style="font-weight:900;font-size:13px;color:#1565C0">전형 전략 추천</span>'          +'<span style="background:#1565C0;color:#fff;font-size:11px;font-weight:800;padding:2px 11px;border-radius:20px;margin-left:4px">종합형 우선 추천</span>'        +'</div>'        +'<div style="font-size:11px;color:#1E3A8A;line-height:1.9;font-weight:500">'          +'탐구 깊이와 성장 서사가 모두 탄탄합니다. 학종(종합전형)에서 경쟁력이 높습니다.<br>'          +'세특 탐구를 추가 보완하면 <strong>최상위권 종합전형 도전</strong>이 가능합니다.'        +'</div>'      +'</div>'      +'</div>';
 
     // ══ 5페이지: 수시 지원가능 대학 리스트 ══
     const myGradeForPass = (() => {
@@ -5041,7 +5039,7 @@ export default function HaksenbuAnalyzer() {
             {printing ? "⏳ AI 추천 생성 중..." : "🖨️ 출력 / 저장"}
           </button>
           <div style={{display:"flex",gap:2,background:"#F3F4F6",borderRadius:9,padding:3}}>
-            {[{key:"network",label:"🕸 키워드"},{key:"summary",label:"📋 활동"},{key:"grades",label:"📊 내신"},{key:"recommend",label:"💡 탐구추천"},{key:"score",label:"📈 점수분석"},...(curriculum!=="2022"?[{key:"pass",label:"🏆 합격분석"}]:[])].map(tab=>(
+            {[{key:"network",label:"🕸 키워드"},{key:"summary",label:"📋 활동"},{key:"grades",label:"📊 내신"},{key:"recommend",label:"💡 탐구추천"},...(curriculum!=="2022"?[{key:"pass",label:"🏆 합격분석"}]:[])].map(tab=>(
               <button key={tab.key} onClick={()=>setActiveTab(tab.key)}
                 style={{padding:"5px 10px",background:activeTab===tab.key?"#fff":"transparent",border:activeTab===tab.key?"1.5px solid #D1D5DB":"1px solid transparent",borderRadius:7,color:activeTab===tab.key?"#1565C0":"#9CA3AF",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
                 {tab.label}
@@ -5097,7 +5095,7 @@ export default function HaksenbuAnalyzer() {
         <div style={{flex:1,overflow:"auto",padding:"20px"}}>
           <div style={{maxWidth:900,margin:"0 auto"}}>
 
-          {/* ── 학생부 종합 평가 (활동정리 탭 상단) ── */}
+          {/* ── 학생부 종합 평가 ── */}
           {data && (() => {
             const topics = data.summary?.["탐구주제"] || [];
             const acts   = data.summary?.["활동경험"] || [];
@@ -5109,26 +5107,16 @@ export default function HaksenbuAnalyzer() {
             const _ns = (()=>{const a=parseFloat(allAvgStr||"9");const gs=a<=1.3?7:a<=1.7?6:a<=2.2?5:a<=2.7?3:1;return gs+Math.round(Math.min(3,upTrend/6*3));})();
             const _nc = (()=>{const a=parseFloat(allAvgStr||"9");const g=curriculum==="2022"?(a<=1.1?"최상위권":a<=1.5?"상위권":a<=2.0?"중위권":a<=2.5?"중하위권":"하위권"):(a<=1.3?"최상위권":a<=2.0?"상위권":a<=3.0?"중위권":a<=3.5?"중하위권":"하위권");const u=upTrend>=5?"상승세 뚜렷":upTrend>=2?"상승세 있음":upTrend>=1?"소폭 상승":"상승세 없음";return g+" · "+u;})();
             const evalItems = [
-              { label:"전공 연계성",  score:Math.round(Math.min(10, (highFit+midFit*0.4)/12*10)), max:10, desc:`높음 ${highFit}건 / 중간 ${midFit}건`, icon:"🎯",
-                comment: highFit>=10?"최우수":highFit>=7?"우수":highFit>=4?"양호":highFit>=2?"보통":"부족" },
-              { label:"탐구주제 활동", score:Math.round(Math.min(10, topics.length/20*10)), max:10, desc:`${topics.length}건`, icon:"🔬",
-                comment: topics.length>=18?"최우수":topics.length>=13?"우수":topics.length>=8?"양호":topics.length>=4?"보통":"부족" },
-              { label:"활동 경험",   score:Math.round(Math.min(10, acts.length/12*10)), max:10, desc:`${acts.length}건`, icon:"🏃",
-                comment: acts.length>=11?"최우수":acts.length>=8?"우수":acts.length>=5?"양호":acts.length>=2?"보통":"부족" },
-              { label:"독서 활동",   score:Math.round(Math.min(10, books.length/12*10)), max:10, desc:`${books.length}권`, icon:"📚",
-                comment: books.length>=11?"최우수":books.length>=8?"우수":books.length>=5?"양호":books.length>=2?"보통":"부족" },
-              { label:"내신 종합",   score:_ns, max:10, desc:`${allAvgStr||"—"}등급 · 상승 ${upTrend}과목`, icon:"📊",
-                comment: _nc },
+              { label:"전공 연계성",  score:Math.round(Math.min(10,(highFit+midFit*0.4)/12*10)), max:10, desc:`높음 ${highFit}건 / 중간 ${midFit}건`, icon:"🎯", comment:highFit>=10?"최우수":highFit>=7?"우수":highFit>=4?"양호":highFit>=2?"보통":"부족" },
+              { label:"탐구주제 활동",score:Math.round(Math.min(10,topics.length/20*10)), max:10, desc:`${topics.length}건`, icon:"🔬", comment:topics.length>=18?"최우수":topics.length>=13?"우수":topics.length>=8?"양호":topics.length>=4?"보통":"부족" },
+              { label:"활동 경험",   score:Math.round(Math.min(10,acts.length/12*10)), max:10, desc:`${acts.length}건`, icon:"🏃", comment:acts.length>=11?"최우수":acts.length>=8?"우수":acts.length>=5?"양호":acts.length>=2?"보통":"부족" },
+              { label:"독서 활동",   score:Math.round(Math.min(10,books.length/12*10)), max:10, desc:`${books.length}권`, icon:"📚", comment:books.length>=11?"최우수":books.length>=8?"우수":books.length>=5?"양호":books.length>=2?"보통":"부족" },
+              { label:"내신 종합",   score:_ns, max:10, desc:`${allAvgStr||"—"}등급 · 상승 ${upTrend}과목`, icon:"📊", comment:_nc },
             ];
             const tot = evalItems.reduce((a,i)=>a+i.score,0);
             const maxT = evalItems.reduce((a,i)=>a+i.max,0);
             const pct = Math.round(tot/maxT*100);
-            const 계열s = getCategory열(major);
-            const evalTip = 계열s && 계열_EVAL_TIPS[계열s] ? 계열_EVAL_TIPS[계열s] : null;
-            const overall = pct>=80?{label:"우수",color:"#15803D",bg:"#F0FDF4"}:
-                            pct>=60?{label:"양호",color:"#1565C0",bg:"#EFF6FF"}:
-                            pct>=40?{label:"보통",color:"#D97706",bg:"#FFFBEB"}:
-                                    {label:"보강 필요",color:"#DC2626",bg:"#FEF2F2"};
+            const overall = pct>=80?{label:"우수",color:"#15803D",bg:"#F0FDF4"}:pct>=60?{label:"양호",color:"#1565C0",bg:"#EFF6FF"}:pct>=40?{label:"보통",color:"#D97706",bg:"#FFFBEB"}:{label:"보강 필요",color:"#DC2626",bg:"#FEF2F2"};
             return (
               <div style={{background:"#fff",border:"1.5px solid #E5E7EB",borderRadius:14,padding:"16px 20px",marginBottom:18,boxShadow:"0 2px 12px rgba(0,0,0,0.06)"}}>
                 <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
@@ -5137,7 +5125,7 @@ export default function HaksenbuAnalyzer() {
                   <span style={{background:overall.bg,color:overall.color,border:`1.5px solid ${overall.color}40`,fontSize:12,fontWeight:800,padding:"3px 12px",borderRadius:20}}>{overall.label}</span>
                   <span style={{marginLeft:"auto",fontSize:22,fontWeight:900,color:overall.color}}>{pct}<span style={{fontSize:12,fontWeight:600}}>점</span></span>
                 </div>
-                <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:10,marginBottom:evalTip?14:0}}>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:10,marginBottom:14}}>
                   {evalItems.map((item,i) => {
                     const pctI = item.score/item.max*100;
                     const cl = pctI>=80?"#15803D":pctI>=60?"#1565C0":pctI>=40?"#D97706":"#DC2626";
@@ -5156,7 +5144,7 @@ export default function HaksenbuAnalyzer() {
                     );
                   })}
                 </div>
-                <div style={{background:"#EFF6FF",border:"2px solid #1565C0",borderRadius:12,padding:"14px 18px",marginTop:14}}>
+                <div style={{background:"#EFF6FF",border:"2px solid #1565C0",borderRadius:12,padding:"14px 18px"}}>
                   <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
                     <span style={{fontSize:15}}>🎯</span>
                     <span style={{fontWeight:900,fontSize:13,color:"#1565C0"}}>전형 전략 추천</span>
