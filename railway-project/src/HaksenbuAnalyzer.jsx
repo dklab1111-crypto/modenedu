@@ -511,7 +511,16 @@ const SETECH_EXAMPLES = {
     "(캠공) 사회학 이론과 실제 탐구반 - 청소년 자살문제 원인 분석 및 해결방안",
     "(사회문화) 아동에게 나타나는 일탈 행동의 원인과 교육 방향 탐구",
     "(진로 영어) 하브루타 질문 수업의 방법과 원리, 효과에 대한 탐구 및 발표,",
-    "(과학과제연구) 직초점 촬영법을 이용한 태양의 위도별 자전 주기 계산 및 비교 활동"
+    "(과학과제연구) 직초점 촬영법을 이용한 태양의 위도별 자전 주기 계산 및 비교 활동",
+    // ── 28명 합격생 실세특 사례 (경영·금융·국제통상) ──
+    "(경제·진로활동) R프로그램으로 2016~2022년 최저임금 인상률과 서울·전라남도·경상북도 실업률 상관관계 회귀분석, 통계 착시 현상 원인으로 단기 아르바이트생·구직단념자 분류 문제 지적",
+    "(수학II) MATLAB으로 약 365일간 브렌트·WTI 원유 일별 종가 수집, 평균제곱오차(MSE) 손실함수 정의 후 경사하강법으로 손실값 99.9% 감소 최적화 확인",
+    "(확률과 통계) CBOE SKEW·VIX 지수 최근 5년 데이터 수집, R 샤피로 테스트 후 t-test 진행, 선형회귀분석으로 VIX 1단위 증가 시 시장 수익률 약 0.002 단위 변화 도출",
+    "(통합사회) GAN(생성적 적대 신경망)으로 금융사기 탐지 시나리오 생성, 강화학습 기반 생성기로 시계열 특성 학습해 정상·비정상 거래 패턴 구별",
+    "(영어II) 젠트리피케이션 해결을 위한 공동체 중심 재개발 탐구, 캘리포니아·뉴욕·영국·네덜란드·부산 등 6개 사례 정책 비교 분석 포스터 제출",
+    "(사회문제탐구) 버거킹 'Whopper Sacrifice' 캠페인 분석으로 소셜미디어 상호작용성이 브랜드 충성도·바이럴 확산에 미치는 영향 체계적 분석",
+    "(세계사) 17세기 초 네덜란드 동인도 회사 주식 열풍·이삭 르 메어 무차입 공매도 사건으로 현대 금융 시장 규제 및 내부자 거래 문제 탐구",
+    "(경제) IEA·OECD 데이터로 2013~2014년 탄소배출권·탄소세 도입 전후 제조업·전력·기타 산업별 탄소 배출량 회귀분석, 산업별 맞춤형 감축 정책 필요성 강조"
   ],
   "공학계열": [
     "(기술·가정) 친환경 전기자동차 제작하기 활동",
@@ -1836,6 +1845,17 @@ const SOC_TOPICS = [
   "소비자 행동 이론(심리적 가격결정·넛지 전략)과 기업 마케팅 전략 분석",
   "SNS 광고 효과 측정 지표(CPM·CTR·ROAS)와 디지털 광고 시장 동향 탐구",
   "공정무역 기업 사례를 통한 사회적 기업의 지속가능한 비즈니스 모델 탐구",
+  // === 28명 합격생 실세특 탐구주제 (경영·금융·국제통상) ===
+  "R프로그램으로 최저임금 인상률과 지역별 실업률 회귀분석, 통계 착시 원인 탐구",
+  "MATLAB으로 브렌트·WTI 원유 일별 종가 수집 후 경사하강법으로 MSE 손실함수 최적화",
+  "CBOE SKEW·VIX 지수 t-test와 선형회귀분석으로 시장 변동성 예측 모델 구현",
+  "GAN(생성적 적대 신경망)으로 금융사기 거래 탐지 시나리오 생성 및 판별기 학습",
+  "엘리엇 파동이론과 프렉탈 모형으로 주가 예측, 상승 5파동·하락 3파동 패턴 식별",
+  "사모펀드의 IPO·M&A 투자 전략 분석, 카0.0모빌리티 매각 사례 단기 투자자금 회수 탐구",
+  "젠트리피케이션 해결을 위한 공동체 중심 재개발 정책 6개국 비교 분석",
+  "소셜미디어 상호작용성이 브랜드 충성도·바이럴 확산에 미치는 영향 캠페인 사례 분석",
+  "IEA·OECD 데이터로 탄소배출권 거래제·탄소세 도입 전후 산업별 탄소 배출량 회귀분석",
+  "네덜란드 동인도 회사 주식 열풍·무차입 공매도 사건으로 현대 금융 규제 역사 탐구",
 ];
 
 const ENG_TOPICS = [
@@ -2453,7 +2473,7 @@ JSON만 출력(마크다운 없이):
         <div style={{background:"#fff",borderRadius:16,border:"1px solid #E5E7EB",overflow:"hidden",boxShadow:"0 1px 8px rgba(0,0,0,0.05)"}}>
           <div style={{background:"linear-gradient(135deg,#1565C0,#1976D2)",padding:"20px 24px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:16,flexWrap:"wrap"}}>
             <div>
-              <div style={{color:"rgba(255,255,255,0.6)",fontSize:10,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:6}}>모든에듀 세특 가이드북 기반</div>
+              <div style={{color:"rgba(255,255,255,0.6)",fontSize:10,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:6}}>실제 합격생 세특 주제 기반</div>
               <div style={{color:"#fff",fontSize:20,fontWeight:900,letterSpacing:"-0.02em"}}>{major} 탐구주제 추천</div>
               <div style={{color:"rgba(255,255,255,0.6)",fontSize:11,marginTop:5,display:"flex",gap:14,flexWrap:"wrap"}}>
                 {guidebookRec.생명과학1.length > 0 && <span>📗 생명과학1 {guidebookRec.생명과학1.length}개</span>}
@@ -2582,8 +2602,8 @@ JSON만 출력(마크다운 없이):
           <div style={{padding:"14px 20px",borderBottom:"1px solid #F3F4F6",background:"#F8FAFC",display:"flex",alignItems:"center",gap:8}}>
             <span style={{fontSize:16}}>📚</span>
             <div>
-              <div style={{fontWeight:800,fontSize:13,color:"#111827"}}>모든에듀 세특 가이드북 기반 추가 추천</div>
-              <div style={{fontSize:11,color:"#6B7280",marginTop:2}}>아펙스컨설팅팀 세특 가이드북 기반 과목별 탐구주제</div>
+              <div style={{fontWeight:800,fontSize:13,color:"#111827"}}>실제 합격생 세특 주제 기반 추가 추천</div>
+              <div style={{fontSize:11,color:"#6B7280",marginTop:2}}>실제 합격생 세특 주제 + 탐구주제 DB 기반 과목별 탐구주제</div>
             </div>
           </div>
           <div style={{padding:"16px 20px"}}>
@@ -2656,7 +2676,7 @@ JSON만 출력(마크다운 없이):
         </div>{/* card wrapper */}
 
         <div style={{textAlign:"center",color:"#C5CFD8",fontSize:10,paddingBottom:4}}>
-          클릭하면 클립보드에 복사됩니다 · 모든에듀 세특 가이드북 + 경상남도교육청 과학탐구실험 자료집 기반
+          클릭하면 클립보드에 복사됩니다 · 실제 합격생 세특 주제 + 탐구주제 DB 기반
         </div>
       </div>
     </div>
@@ -3742,7 +3762,7 @@ export default function HaksenbuAnalyzer() {
     </div>
     ${aiCards}
     <div style="margin-top:20px;border-top:1.5px solid #E5E7EB;padding-top:16px">
-      <div style="font-weight:800;font-size:12px;color:#374151;margin-bottom:10px">📚 모든에듀 세특 가이드북 기반 추가 추천</div>
+      <div style="font-weight:800;font-size:12px;color:#374151;margin-bottom:10px">📚 실제 합격생 세특 주제 기반 추가 추천</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
         ${aiAllSections}
       </div>
@@ -3814,14 +3834,14 @@ export default function HaksenbuAnalyzer() {
         ].filter(s=>s).join('');
       recommendHtml = `
   <div class="page-section">
-    <div class="page-header">💡 4페이지 · 탐구주제 추천 (모든에듀 세특 가이드북)</div>
+    <div class="page-header">💡 4페이지 · 탐구주제 추천 (실제 합격생 세특 주제)</div>
     <div style="background:#FFF7ED;border:1.5px solid #FED7AA;border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:11px;color:#92400E;font-weight:600">
       📌 앱에서 ⭐ 아펙스 컨설팅팀 추천 버튼을 클릭하면 AI 맞춤 추천 3가지가 여기에 표시됩니다
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
       ${subjectSections}
     </div>
-    <div style="margin-top:8px;font-size:9px;color:#C5CFD8;text-align:right">출처: 모든에듀 세특 가이드북 + 경상남도·전라북도교육청 과학탐구실험 자료집</div>
+    <div style="margin-top:8px;font-size:9px;color:#C5CFD8;text-align:right">출처: 실제 합격생 세특 주제 + 탐구주제 DB</div>
   </div>`;
     }
 
@@ -4522,7 +4542,7 @@ export default function HaksenbuAnalyzer() {
             <div style={{display:"inline-flex",alignItems:"center",gap:8,background:"#EFF6FF",border:"1px solid #BFDBFE",borderRadius:20,padding:"6px 18px",marginBottom:16}}>
               <span style={{color:"#1D4ED8",fontSize:12,fontWeight:700}}>모든에듀 AI 학생부 분석 시스템</span>
             </div>
-            <h1 style={{margin:"0 0 12px",fontSize:34,fontWeight:900,color:"#111827",lineHeight:1.2,letterSpacing:"-0.03em"}}>키워드 네트워크 분석기 <span style={{fontSize:13,fontWeight:700,color:"#fff",background:"#1D4ED8",borderRadius:6,padding:"2px 8px",verticalAlign:"middle",letterSpacing:0}}>v18</span></h1>
+            <h1 style={{margin:"0 0 12px",fontSize:34,fontWeight:900,color:"#111827",lineHeight:1.2,letterSpacing:"-0.03em"}}>키워드 네트워크 분석기 <span style={{fontSize:13,fontWeight:700,color:"#fff",background:"#1D4ED8",borderRadius:6,padding:"2px 8px",verticalAlign:"middle",letterSpacing:0}}>v19</span></h1>
             <p style={{color:"#6B7280",fontSize:14,lineHeight:1.85,margin:0}}>학생부 PDF를 업로드하면 AI가 핵심 키워드를 추출하고<br/>목표 전공 기반 네트워크로 시각화합니다</p>
           </div>
           <div style={{background:"#fff",border:"1.5px solid #E5EDF5",borderRadius:20,padding:"34px 30px",boxShadow:"0 6px 30px rgba(0,0,0,0.08)"}}>
