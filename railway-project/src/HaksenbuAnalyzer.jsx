@@ -5309,9 +5309,7 @@ export default function HaksenbuAnalyzer() {
       {activeTab==="recommend" && (
         <RecommendTab major={major} curriculum={curriculum} currBadge={currBadge} onAiResult={setPrintAiTopics} apiKey={apiKey} />
       )}
-      {activeTab==="score" && (
-        <ScorePanel scoreData={scoreData} major={major} allAvg={allAvg} guide={GUIDE_DB[major]||null} studentKeywords={data?.keywords||[]} />
-      )}
+
       {activeTab==="pass" && curriculum !== "2022" && (
         <PassAnalysisTab major={major} data={data} />
       )}
