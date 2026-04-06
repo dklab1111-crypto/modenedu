@@ -3419,18 +3419,7 @@ function ScorePanel({ scoreData, major, allAvg, guide, studentKeywords }) {
             <text x={cx} y={cy+8} textAnchor="middle" fontSize={16} fontWeight={900} fill="#111827">{scoreData?total:"-"}</text>
             <text x={cx} y={cy+22} textAnchor="middle" fontSize={9} fill="#9CA3AF">/20</text>
           </svg>
-          {/* 점수 바 */}
-          <div style={{marginTop:8,display:"flex",flexDirection:"column",gap:6}}>
-            {dims.map((d,i)=>(
-              <div key={d} style={{display:"flex",alignItems:"center",gap:8}}>
-                <div style={{fontSize:9,fontWeight:700,color:colors[d],width:52,textAlign:"right"}}>{labels[d]}</div>
-                <div style={{flex:1,height:6,background:"#F3F4F6",borderRadius:3,overflow:"hidden"}}>
-                  <div style={{width:`${(scores[i]/5)*100}%`,height:"100%",background:colors[d],borderRadius:3,transition:"width 0.6s"}} />
-                </div>
-                <div style={{fontSize:10,fontWeight:800,color:colors[d],width:18}}>{scoreData?scores[i]:"-"}</div>
-              </div>
-            ))}
-          </div>
+
         </div>
 
         {/* 오른쪽: 추천 + GUIDE */}
@@ -3874,6 +3863,7 @@ export default function HaksenbuAnalyzer() {
       if (!src || src.length < 5) return false;          // 증거 없음 → 제거
       if (src === id) return false;                       // 키워드 자체만 반복 → 제거
       if (src.length < id.length) return false;          // id보다 짧으면 이상 → 제거
+      if (!src.includes(id)) return false;               // ⚠️ source_text 안에 키워드 글자 그대로 없으면 제거
       return true;
     });
     const keywords = kwList.length > 0
@@ -4287,21 +4277,7 @@ export default function HaksenbuAnalyzer() {
         +'<span style="background:'+evalOverallColor+'18;color:'+evalOverallColor+';border:1.5px solid '+evalOverallColor+'40;font-size:11px;font-weight:800;padding:2px 10px;border-radius:16px;margin-left:6px">'+evalOverallLabel+'</span>'
         +'<span style="margin-left:auto;font-size:20px;font-weight:900;color:'+evalOverallColor+'">'+evalPct+'<span style="font-size:11px;font-weight:600">점</span></span>'
       +'</div>'
-      +'<div style="display:flex;gap:8px;margin-bottom:'+(evalTipText?'12px':'0')+'">'
-        +evalBarsHtml
-      +'</div>'
-      +'<div style="background:#EFF6FF;border:2px solid #1565C0;border-radius:10px;padding:12px 14px;margin-top:10px">'
-        +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'
-          +'<span style="font-size:14px">🎯</span>'
-          +'<span style="font-weight:900;font-size:13px;color:#1565C0">전형 전략 추천</span>'
-          +'<span style="background:#1565C0;color:#fff;font-size:11px;font-weight:800;padding:2px 11px;border-radius:20px;margin-left:4px">종합형 우선 추천</span>'
-        +'</div>'
-        +'<div style="font-size:11px;color:#1E3A8A;line-height:1.9;font-weight:500">'
-          +'탐구 깊이와 성장 서사가 모두 탄탄합니다. 학종(종합전형)에서 경쟁력이 높습니다.<br>'
-          +'세특 탐구를 추가 보완하면 <strong>최상위권 종합전형 도전</strong>이 가능합니다.'
-        +'</div>'
-      +'</div>'
-      +'</div>';
+      +'<div style="display:flex;      +'<div style="background:#EFF6FF;border:2px solid #1565C0;border-radius:10px;padding:12px 14px;margin-top:4px">'        +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'          +'<span style="font-size:14px">🎯</span>'          +'<span style="font-weight:900;font-size:13px;color:#1565C0">전형 전략 추천</span>'          +'<span style="background:#1565C0;color:#fff;font-size:11px;font-weight:800;padding:2px 11px;border-radius:20px;margin-left:4px">종합형 우선 추천</span>'        +'</div>'        +'<div style="font-size:11px;color:#1E3A8A;line-height:1.9;font-weight:500">'          +'탐구 깊이와 성장 서사가 모두 탄탄합니다. 학종(종합전형)에서 경쟁력이 높습니다.<br>'          +'세특 탐구를 추가 보완하면 <strong>최상위권 종합전형 도전</strong>이 가능합니다.'        +'</div>'      +'</div>'
 
     // ══ 5페이지: 수시 지원가능 대학 리스트 ══
     const myGradeForPass = (() => {
