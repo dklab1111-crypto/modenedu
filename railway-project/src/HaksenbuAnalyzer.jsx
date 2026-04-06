@@ -4290,10 +4290,17 @@ export default function HaksenbuAnalyzer() {
       +'<div style="display:flex;gap:8px;margin-bottom:'+(evalTipText?'12px':'0')+'">'
         +evalBarsHtml
       +'</div>'
-      +(evalTipText ? '<div style="background:#F0F6FF;border-radius:8px;padding:10px 12px;border:1px solid #BFDBFE;margin-top:0">'
-        +'<div style="font-size:10px;font-weight:800;color:#1565C0;margin-bottom:5px">💡 '+evalKernel+' 학생부 평가 핵심 포인트</div>'
-        +'<div style="font-size:10px;color:#374151;line-height:1.7">'+evalTipText+'</div>'
-        +'</div>' : '')
+      +'<div style="background:#EFF6FF;border:2px solid #1565C0;border-radius:10px;padding:12px 14px;margin-top:10px">'
+        +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'
+          +'<span style="font-size:14px">🎯</span>'
+          +'<span style="font-weight:900;font-size:13px;color:#1565C0">전형 전략 추천</span>'
+          +'<span style="background:#1565C0;color:#fff;font-size:11px;font-weight:800;padding:2px 11px;border-radius:20px;margin-left:4px">종합형 우선 추천</span>'
+        +'</div>'
+        +'<div style="font-size:11px;color:#1E3A8A;line-height:1.9;font-weight:500">'
+          +'탐구 깊이와 성장 서사가 모두 탄탄합니다. 학종(종합전형)에서 경쟁력이 높습니다.<br>'
+          +'세특 탐구를 추가 보완하면 <strong>최상위권 종합전형 도전</strong>이 가능합니다.'
+        +'</div>'
+      +'</div>'
       +'</div>';
 
     // ══ 5페이지: 수시 지원가능 대학 리스트 ══
@@ -5173,12 +5180,17 @@ export default function HaksenbuAnalyzer() {
                     );
                   })}
                 </div>
-                {evalTip && (
-                  <div style={{background:"#F0F6FF",borderRadius:10,padding:"12px 14px",border:"1px solid #BFDBFE",marginTop:14}}>
-                    <div style={{fontSize:11,fontWeight:800,color:"#1565C0",marginBottom:6}}>💡 {계열s} 학생부 평가 핵심 포인트</div>
-                    <div style={{fontSize:11,color:"#374151",lineHeight:1.8}}>{evalTip}</div>
+                <div style={{background:"#EFF6FF",border:"2px solid #1565C0",borderRadius:12,padding:"14px 18px",marginTop:14}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                    <span style={{fontSize:15}}>🎯</span>
+                    <span style={{fontWeight:900,fontSize:13,color:"#1565C0"}}>전형 전략 추천</span>
+                    <span style={{background:"#1565C0",color:"#fff",fontSize:11,fontWeight:800,padding:"2px 11px",borderRadius:20,marginLeft:4}}>종합형 우선 추천</span>
                   </div>
-                )}
+                  <div style={{fontSize:12,color:"#1E3A8A",lineHeight:1.9,fontWeight:500}}>
+                    탐구 깊이와 성장 서사가 모두 탄탄합니다. 학종(종합전형)에서 경쟁력이 높습니다.<br/>
+                    세특 탐구를 추가 보완하면 <strong>최상위권 종합전형 도전</strong>이 가능합니다.
+                  </div>
+                </div>
               </div>
             );
           })()}
