@@ -3957,15 +3957,29 @@ export default function HaksenbuAnalyzer() {
         "사회_경영경제":["경영","경제","회계","금융"],
       };
       const kws = sciMap[cat] || [majorStem.slice(0,2)];
+      // 계열별 허용 UNIV_DB[3] 값 매핑
+      const catKEY = getCategory열(major);
+      const allowedDBCat = (c) => {
+        if (!c) return () => true;
+        if (c === "의약계열") return dbCat => ["메디컬","자연","공통"].includes(dbCat);
+        if (c === "공학계열") return dbCat => ["자연","공통"].includes(dbCat);
+        if (c === "자연계열") return dbCat => ["자연","공통"].includes(dbCat);
+        if (c === "인문계열" || c === "사회계열") return dbCat => ["인문","공통"].includes(dbCat);
+        if (c === "사범계열") return dbCat => ["인문","자연","공통"].includes(dbCat);
+        return () => true;
+      };
+      const catFilter = allowedDBCat(catKEY);
       const allMatched = UNIV_DB.filter(d => {
         const g70 = d[9];
         if (!g70 || g70 < lo || g70 > hi) return false;
         return kws.some(kw => (d[4]||'').includes(kw));
       }).sort((a,b) => a[9] - b[9]);
-      // 전공 필터 결과 10개 미만이면 전체에서 뽑기
+      // 전공 필터 결과 10개 미만이면 계열 필터 적용하여 뽑기
       if (allMatched.length < 10) {
         return UNIV_DB.filter(d => {
-          const g70 = d[9]; return g70 && g70 >= lo && g70 <= hi;
+          const g70 = d[9];
+          if (!g70 || g70 < lo || g70 > hi) return false;
+          return catFilter(d[3]);
         }).sort((a,b) => a[9] - b[9]);
       }
       return allMatched;
