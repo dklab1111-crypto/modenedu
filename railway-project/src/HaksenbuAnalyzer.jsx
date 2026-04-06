@@ -4733,7 +4733,16 @@ export default function HaksenbuAnalyzer() {
   // ─── 네트워크 그래프 데이터 useMemo ───
   const networkGraphData = useMemo(() => {
     if (!data?.keywords) return null;
-    const nodes = data.keywords.map(k => ({ ...k }));
+    // kwList와 동일한 필터 적용 (source_text 안에 키워드 글자 그대로 포함 여부 검증)
+    const filtered = data.keywords.filter(k => {
+      const id = (k.id || k.text || k.name || "").trim();
+      const src = (k.source_text || "").trim();
+      if (!id || !src || src.length < 5) return false;
+      if (src === id || src.length < id.length) return false;
+      if (!src.includes(id)) return false;
+      return true;
+    });
+    const nodes = filtered.map(k => ({ ...k }));
     const nodeIds = new Set(nodes.map(n => n.id));
     const links = data.links.filter(l => nodeIds.has(l.source) && nodeIds.has(l.target)).map(l => ({ ...l }));
     const clusters = [...new Set(nodes.filter(n => !n.major_related).map(n => n.cluster))];
@@ -5080,7 +5089,7 @@ export default function HaksenbuAnalyzer() {
             {clusters.map(c=><span key={c} style={{color:"#6B7280",fontSize:11,fontWeight:600}}>#{c}</span>)}
           </div>
           <div style={{position:"absolute",bottom:12,right:12,display:"flex",gap:7}}>
-            {[{label:"총 키워드",value:data.keywords.length,color:"#1565C0"},{label:"전공 연관",value:data.keywords.filter(k=>k.major_related).length,color:"#C2410C"},{label:"연결선",value:data.links.length,color:"#0277BD"}].map(s=>(
+            {[{label:"총 키워드",value:networkGraphData?.nodes?.length||0,color:"#1565C0"},{label:"전공 연관",value:networkGraphData?.nodes?.filter(k=>k.major_related)?.length||0,color:"#C2410C"},{label:"연결선",value:networkGraphData?.links?.length||0,color:"#0277BD"}].map(s=>(
               <div key={s.label} style={{background:"#fff",border:"1.5px solid #E5E7EB",borderRadius:10,padding:"7px 13px",textAlign:"center",boxShadow:"0 2px 8px rgba(0,0,0,0.06)"}}>
                 <div style={{color:s.color,fontSize:19,fontWeight:800,lineHeight:1.2}}>{s.value}</div>
                 <div style={{color:"#9CA3AF",fontSize:9,marginTop:2,fontWeight:600}}>{s.label}</div>
