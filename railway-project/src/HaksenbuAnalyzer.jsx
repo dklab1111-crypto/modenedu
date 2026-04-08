@@ -3863,7 +3863,7 @@ export default function HaksenbuAnalyzer() {
       if (!src || src.length < 5) return false;          // 증거 없음 → 제거
       if (src === id) return false;                       // 키워드 자체만 반복 → 제거
       if (src.length < id.length) return false;          // id보다 짧으면 이상 → 제거
-      if (!src.includes(id)) return false;               // ⚠️ source_text 안에 키워드 글자 그대로 없으면 제거
+      if (!src.includes(id) && !src.replace(/\s/g,"").includes(id.replace(/\s/g,""))) return false; // source_text에 키워드 없으면 제거 (공백 무시 비교 포함)
       return true;
     });
     const keywords = kwList.length > 0
@@ -4246,12 +4246,15 @@ export default function HaksenbuAnalyzer() {
     const evalMidFit  = evalTopics.filter(function(t){return t.major_fit==="중간"}).length;
     const evalRows = data.grades?.subject_grades||[];
     const evalUpTrend = evalRows.filter(function(r){return r.trend==="up"}).length;
+    const _evalAllAvgStr = allAvg || "9";
+    const _evalNs = (()=>{const a=parseFloat(_evalAllAvgStr||"9");const gs=a<=1.3?7:a<=1.7?6:a<=2.2?5:a<=2.7?3:1;return gs+Math.round(Math.min(3,evalUpTrend/6*3));})();
+    const _evalNc = (()=>{const a=parseFloat(_evalAllAvgStr||"9");const g=curriculum==="2022"?(a<=1.1?"최상위권":a<=1.5?"상위권":a<=2.0?"중위권":a<=2.5?"중하위권":"하위권"):(a<=1.3?"최상위권":a<=2.0?"상위권":a<=3.0?"중위권":a<=3.5?"중하위권":"하위권");const u=evalUpTrend>=5?"상승세 뚜렷":evalUpTrend>=2?"상승세 있음":evalUpTrend>=1?"소폭 상승":"상승세 없음";return g+" · "+u;})();
     const evalItemsP = [
-      {label:"전공 연계성",   score:Math.round(Math.min(10, (evalHighFit+evalMidFit*0.4)/12*10)), max:10, icon:"🎯"},
-      {label:"탐구주제 활동", score:Math.round(Math.min(10, evalTopics.length/20*10)), max:10, icon:"🔬"},
-      {label:"활동 경험",    score:Math.round(Math.min(10, evalActs.length/12*10)), max:10, icon:"🏃"},
-      {label:"독서 활동",    score:Math.round(Math.min(10, evalBooks.length/12*10)), max:10, icon:"📚"},
-      {label:"내신 종합", score:(()=>{const a=parseFloat(allAvg||"9"); const gs=a<=1.3?7:a<=1.7?6:a<=2.2?4:a<=2.7?2:1; const us=Math.min(3,Math.round(evalUpTrend/6*3)); return gs+us;})(), max:10, icon:"📊"},
+      {label:"전공 연계성",   score:Math.round(Math.min(10, (evalHighFit+evalMidFit*0.4)/12*10)), max:10, icon:"🎯", desc:"높음 "+evalHighFit+"건 / 중간 "+evalMidFit+"건", comment:evalHighFit>=10?"최우수":evalHighFit>=7?"우수":evalHighFit>=4?"양호":evalHighFit>=2?"보통":"부족"},
+      {label:"탐구주제 활동", score:Math.round(Math.min(10, evalTopics.length/20*10)), max:10, icon:"🔬", desc:evalTopics.length+"건", comment:evalTopics.length>=18?"최우수":evalTopics.length>=13?"우수":evalTopics.length>=8?"양호":evalTopics.length>=4?"보통":"부족"},
+      {label:"활동 경험",    score:Math.round(Math.min(10, evalActs.length/12*10)), max:10, icon:"🏃", desc:evalActs.length+"건", comment:evalActs.length>=11?"최우수":evalActs.length>=8?"우수":evalActs.length>=5?"양호":evalActs.length>=2?"보통":"부족"},
+      {label:"독서 활동",    score:Math.round(Math.min(10, evalBooks.length/12*10)), max:10, icon:"📚", desc:evalBooks.length+"권", comment:evalBooks.length>=11?"최우수":evalBooks.length>=8?"우수":evalBooks.length>=5?"양호":evalBooks.length>=2?"보통":"부족"},
+      {label:"내신 종합",    score:_evalNs, max:10, icon:"📊", desc:(_evalAllAvgStr||"—")+"등급 · 상승 "+evalUpTrend+"과목", comment:_evalNc},
     ];
     const evalTot = evalItemsP.reduce(function(a,i){return a+i.score},0);
     const evalMax = evalItemsP.reduce(function(a,i){return a+i.max},0);
@@ -4570,7 +4573,7 @@ export default function HaksenbuAnalyzer() {
       + "\n• 전공적합성: 목표전공 직접연관 키워드·탐구 비율. 80%=5, 60%=4, 40%=3, 20%=2, 미만=1."
       + "\n• 서사: 1→3학년 일관성+성장서술. 명확=5, 부분연결=3, 단편=1."
       + "\n• 유형: 종합형(탐구+서사)/교과형(성적중심)/활동형(경험다양)/균형형(전방위) 중 택1"
-      + "\nkeywords 규칙: ⚠️최우선규칙⚠️ 학생부 원문 텍스트를 한 줄씩 읽으면서 [키워드 고정 풀]에 있는 단어가 그 줄에 실제로 보이면 선택. 보이지 않으면 절대 선택 금지. 추론·연상·유추 금지. 전공명을 보고 관련 단어 추가 금지. 추상어(분석,탐구,연구,학습,이해,역량,활동,발표) 절대금지. 위반 시 결과 전체 무효."
+      + "\nkeywords 규칙: ① 1순위 - [키워드 고정 풀]에 있는 단어가 학생부 원문에 글자 그대로 보이면 반드시 선택. ② 2순위 - 풀에 없더라도 세특·창체 원문에 직접 등장하는 학문 개념어(이론명·실험명·인물명·전문용어)는 최대 10개까지 추가 가능. 단 추상어(분석,탐구,연구,학습,이해,역량,활동,발표) 절대금지. source_text 제시 불가 시 추가 금지. 추론·연상·유추 금지."
       + "\n⚠️ [증거 필수] keywords 각 항목에 source_text를 반드시 포함. source_text는 해당 키워드가 등장하는 원문 문장 10~30자를 그대로 복사한 것. 키워드 단어 자체만 쓰는 것 금지. source_text를 제시할 수 없으면 그 키워드는 선택 금지."
       + "\nkeywords 각 항목: id(풀에서 선택한 키워드 또는 세특 등장 전문용어), subject(해당 세특 과목명), cluster(풀의 클러스터명 사용), size(15~30), major_related(불리언), source_text(원문에서 해당 키워드가 포함된 문장 10~30자 직접 인용)"
       + "\nlinks: 같은 탐구/실험에서 함께 등장한 키워드끼리 연결. source·target은 반드시 keywords의 id값만 사용."
@@ -4739,7 +4742,7 @@ export default function HaksenbuAnalyzer() {
       const src = (k.source_text || "").trim();
       if (!id || !src || src.length < 5) return false;
       if (src === id || src.length < id.length) return false;
-      if (!src.includes(id)) return false;
+      if (!src.includes(id) && !src.replace(/\s/g,'').includes(id.replace(/\s/g,''))) return false;
       return true;
     });
     const nodes = filtered.map(k => ({ ...k }));
