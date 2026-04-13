@@ -4508,7 +4508,36 @@ export default function HaksenbuAnalyzer() {
     }
   }, [data, major, studentName, curriculum, sg, printAiTopics, activeTab, svgCacheRef, apiKey]);
 
-  const readPdf = (file) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result.split(",")[1]); r.onerror = rej; r.readAsDataURL(file); });
+const RAILWAY_URL = "https://modenedu-production.up.railway.app";
+
+  const saveStudentData = async (parsedData, studentName, major, curriculum) => {
+    try {
+      const keywords = (parsedData.keywords || []).map(k => k.id);
+      const topics = (parsedData.summary?.탐구주제 || []).map(t => t.title);
+      const activities = (parsedData.summary?.활동경험 || []).map(a => a.title);
+      const books = (parsedData.summary?.독서 || []).map(b => b.title);
+      const avgs = (parsedData.grades?.subject_grades||[]).map(s=>parseFloat(s.avg)).filter(v=>!isNaN(v));
+      const gradesAvg = avgs.length ? (avgs.reduce((a,b)=>a+b,0)/avgs.length).toFixed(2) : null;
+      const res = await fetch(RAILWAY_URL + "/api/students", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: studentName||"이름없음", major, curriculum, grades_avg: gradesAvg, keywords, topics, activities, books })
+      });
+      const result = await res.json();
+      if (result.ok) console.log("✅ 학생 저장 완료 (누적:", result.total, "명)");
+    } catch(e) { console.warn("저장 실패 (분석은 정상):", e.message); }
+  };
+
+  const loadPastStudents = async (major) => {
+    try {
+      const res = await fetch(RAILWAY_URL + "/api/students?major=" + encodeURIComponent(major) + "&limit=10");
+      const result = await res.json();
+      if (result.ok && result.students.length > 0) return result.students;
+    } catch(e) { console.warn("과거 데이터 로드 실패:", e.message); }
+    return [];
+  };
+
+    const readPdf = (file) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result.split(",")[1]); r.onerror = rej; r.readAsDataURL(file); });
 
   const handleFile = useCallback(async (file) => {
     if (!file) return;
@@ -4613,7 +4642,15 @@ export default function HaksenbuAnalyzer() {
     if (!major.trim()) { setError("목표 전공을 입력해주세요."); return; }
     setError(""); setLoading(true);
     const currLabel = curriculum === "2022" ? "2022개정(고1·고2)" : "2015개정(고3·N수)";
-    const sys = systemPrompt; // useMemo 캐시
+    // 과거 같은 전공 학생 데이터 로드해서 프롬프트에 포함
+    const pastStudents = await loadPastStudents(major);
+    const pastContext = pastStudents.length > 0
+      ? "\n\n[참고 - 같은 전공 분석 학생 " + pastStudents.length + "명 데이터]\n"
+        + pastStudents.slice(-5).map(s =>
+          "· " + (s.name||"?") + "(" + s.major + ") 내신:" + (s.grades_avg||"?") + " 키워드:" + (s.keywords||[]).slice(0,5).join(",")
+        ).join("\n")
+      : "";
+    const sys = systemPrompt + pastContext; // useMemo 캐시 + 누적 데이터
     try {
       const res = await fetch("/api/claude", {
         method:"POST", headers:{"Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01"},
@@ -4720,7 +4757,22 @@ export default function HaksenbuAnalyzer() {
           if (item.major_fit) item.major_fit = fitMap[item.major_fit.toLowerCase()] || item.major_fit;
         });
       });
+      // g값 클렌징: "1등급" → "1"
+      if (parsed.grades?.subject_grades) {
+        const gKeys = ["g1_1","g1_2","g2_1","g2_2","g3_1","g3_2"];
+        parsed.grades.subject_grades = parsed.grades.subject_grades.map(row => {
+          const cleaned = {...row};
+          gKeys.forEach(k => {
+            if (cleaned[k] && cleaned[k] !== "-") {
+              const n = String(cleaned[k]).replace(/[^0-9.]/g,"");
+              cleaned[k] = n || "-";
+            }
+          });
+          return cleaned;
+        });
+      }
       setData(parsed); setPage("result");
+      saveStudentData(parsed, studentName, major, curriculum);
       // score 파싱 저장
       if (parsed.score) setScoreData(parsed.score);
     } catch(err) { setError("⚠️ JSON 파싱 오류가 발생했습니다. 아래 방법을 시도해보세요:\n" +
