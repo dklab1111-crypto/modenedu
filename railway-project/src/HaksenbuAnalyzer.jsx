@@ -3558,6 +3558,246 @@ function ScorePanel({ scoreData, major, allAvg, guide, studentKeywords }) {
   );
 }
 
+// ════════════════════════════════════════════════════════════════════
+// v25 신규: 분석 완료 후 저장 다이얼로그
+// ════════════════════════════════════════════════════════════════════
+function SaveAnalysisDialog({ defaultName, defaultMajor, onSave, onSkip }) {
+  const [name, setName] = useState(defaultName || "");
+  const [admitted, setAdmitted] = useState("미정");
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    const admittedVal = admitted === "미정" ? null : admitted;
+    await onSave(name, admittedVal);
+    setSaving(false);
+  };
+
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9999,fontFamily:"Noto Sans KR,Apple SD Gothic Neo,sans-serif"}}>
+      <div style={{background:"#fff",borderRadius:18,padding:"32px 30px",width:480,maxWidth:"90vw",boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}}>
+        <div style={{textAlign:"center",marginBottom:22}}>
+          <div style={{fontSize:36,marginBottom:8}}>💾</div>
+          <h2 style={{margin:"0 0 6px",fontSize:20,fontWeight:900,color:"#111827"}}>분석 결과를 저장하시겠어요?</h2>
+          <p style={{margin:0,fontSize:12,color:"#6B7280",lineHeight:1.6}}>
+            Google Drive에 저장되어 다른 컨설턴트와 공유되고,<br/>
+            학습용 데이터로 누적되어 분석 품질이 향상됩니다.
+          </p>
+        </div>
+
+        {/* 학생 이름 */}
+        <div style={{marginBottom:16}}>
+          <label style={{display:"block",fontSize:12,fontWeight:700,color:"#374151",marginBottom:6}}>👤 학생 이름</label>
+          <input value={name} onChange={e=>setName(e.target.value)} placeholder="예: 2026_홍길동_의예과"
+            style={{width:"100%",padding:"10px 12px",border:"1.5px solid #D1D5DB",borderRadius:9,fontSize:13,outline:"none",boxSizing:"border-box",fontFamily:"inherit"}}
+            onFocus={e=>e.target.style.borderColor="#1565C0"} onBlur={e=>e.target.style.borderColor="#D1D5DB"} />
+          <div style={{fontSize:10,color:"#9CA3AF",marginTop:4}}>💡 추천 형식: 년도_이름_전공 (예: 2026_김민서_의예과)</div>
+        </div>
+
+        {/* 전공 (참고용 표시) */}
+        <div style={{marginBottom:18,padding:"10px 12px",background:"#F9FAFB",borderRadius:9,border:"1px solid #E5E7EB"}}>
+          <span style={{fontSize:11,color:"#6B7280",fontWeight:600}}>🎯 목표 전공: </span>
+          <span style={{fontSize:12,color:"#1565C0",fontWeight:800}}>{defaultMajor}</span>
+        </div>
+
+        {/* 합격 여부 */}
+        <div style={{marginBottom:22}}>
+          <label style={{display:"block",fontSize:12,fontWeight:700,color:"#374151",marginBottom:8}}>🏆 합격 여부</label>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+            {[
+              {val:"미정",label:"⏳ 미정",color:"#6B7280",bg:"#F3F4F6",border:"#D1D5DB"},
+              {val:"합격",label:"✅ 합격",color:"#15803D",bg:"#DCFCE7",border:"#86EFAC"},
+              {val:"불합격",label:"❌ 불합격",color:"#B91C1C",bg:"#FEE2E2",border:"#FCA5A5"},
+            ].map(opt=>(
+              <button key={opt.val} onClick={()=>setAdmitted(opt.val)}
+                style={{padding:"10px 6px",borderRadius:9,border:"1.5px solid "+(admitted===opt.val?opt.color:"#E5E7EB"),background:admitted===opt.val?opt.bg:"#fff",color:admitted===opt.val?opt.color:"#6B7280",fontSize:12,fontWeight:800,cursor:"pointer",fontFamily:"inherit",transition:"all 0.15s"}}>
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          <div style={{fontSize:10,color:"#9CA3AF",marginTop:6,lineHeight:1.5}}>💡 합격 결과를 입력하면 향후 합격 패턴 분석 데이터로 활용됩니다.<br/>나중에 학생 DB 탭에서 변경 가능합니다.</div>
+        </div>
+
+        {/* 버튼 */}
+        <div style={{display:"flex",gap:10}}>
+          <button onClick={onSkip} disabled={saving}
+            style={{flex:1,padding:"12px 0",borderRadius:10,border:"1.5px solid #D1D5DB",background:"#fff",color:"#6B7280",fontSize:13,fontWeight:700,cursor:saving?"not-allowed":"pointer",fontFamily:"inherit"}}>
+            저장 안 함
+          </button>
+          <button onClick={handleSave} disabled={saving}
+            style={{flex:2,padding:"12px 0",borderRadius:10,border:"none",background:saving?"#9CA3AF":"linear-gradient(135deg,#1565C0,#0277BD)",color:"#fff",fontSize:13,fontWeight:800,cursor:saving?"not-allowed":"pointer",fontFamily:"inherit",boxShadow:"0 2px 10px rgba(21,101,192,0.3)"}}>
+            {saving ? "⏳ 저장 중..." : "💾 Drive에 저장"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════
+// v25 신규: 학생 DB 모달 (저장된 학생 목록 + 검색 + 재로드)
+// ════════════════════════════════════════════════════════════════════
+function StudentDBModal({ students, loading, onClose, onLoad, onUpdateAdmitted, onDelete, onRefresh }) {
+  const [filter, setFilter] = useState({ major: "", admitted: "all", search: "" });
+
+  const filtered = useMemo(() => {
+    return students.filter(s => {
+      if (filter.admitted !== "all") {
+        if (filter.admitted === "미정" && s.admitted) return false;
+        if (filter.admitted !== "미정" && s.admitted !== filter.admitted) return false;
+      }
+      if (filter.major && !(s.major||"").includes(filter.major)) return false;
+      if (filter.search) {
+        const q = filter.search.toLowerCase();
+        const hay = ((s.name||"") + " " + (s.major||"") + " " + (s.keywords||[]).join(" ")).toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [students, filter]);
+
+  // 통계
+  const stats = useMemo(() => {
+    const total = students.length;
+    const passed = students.filter(s => s.admitted === "합격").length;
+    const failed = students.filter(s => s.admitted === "불합격").length;
+    const pending = students.filter(s => !s.admitted).length;
+    return { total, passed, failed, pending };
+  }, [students]);
+
+  // 합격여부별 배지 스타일
+  const admittedBadge = (admitted) => {
+    if (admitted === "합격") return { bg:"#DCFCE7", color:"#15803D", border:"#86EFAC", label:"✅ 합격" };
+    if (admitted === "불합격") return { bg:"#FEE2E2", color:"#B91C1C", border:"#FCA5A5", label:"❌ 불합격" };
+    return { bg:"#F3F4F6", color:"#6B7280", border:"#D1D5DB", label:"⏳ 미정" };
+  };
+
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9998,fontFamily:"Noto Sans KR,Apple SD Gothic Neo,sans-serif",padding:"40px 20px"}} onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:18,width:1100,maxWidth:"100%",maxHeight:"90vh",display:"flex",flexDirection:"column",boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}}>
+        {/* 헤더 */}
+        <div style={{padding:"22px 28px",borderBottom:"1.5px solid #E5E7EB",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <div>
+            <h2 style={{margin:"0 0 4px",fontSize:20,fontWeight:900,color:"#111827"}}>📚 학생 분석 DB</h2>
+            <p style={{margin:0,fontSize:11,color:"#6B7280"}}>Google Drive에 저장된 누적 분석 데이터</p>
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <button onClick={onRefresh} disabled={loading}
+              style={{padding:"7px 12px",border:"1.5px solid #D1D5DB",background:"#fff",borderRadius:8,fontSize:11,fontWeight:700,color:"#6B7280",cursor:loading?"not-allowed":"pointer",fontFamily:"inherit"}}>
+              {loading ? "⏳" : "🔄"} 새로고침
+            </button>
+            <button onClick={onClose}
+              style={{padding:"7px 12px",border:"1.5px solid #D1D5DB",background:"#fff",borderRadius:8,fontSize:11,fontWeight:700,color:"#6B7280",cursor:"pointer",fontFamily:"inherit"}}>
+              ✕ 닫기
+            </button>
+          </div>
+        </div>
+
+        {/* 통계 */}
+        <div style={{padding:"14px 28px",background:"#F9FAFB",borderBottom:"1px solid #E5E7EB",display:"flex",gap:18,alignItems:"center"}}>
+          {[
+            {label:"전체",val:stats.total,color:"#1565C0"},
+            {label:"✅ 합격",val:stats.passed,color:"#15803D"},
+            {label:"❌ 불합격",val:stats.failed,color:"#B91C1C"},
+            {label:"⏳ 미정",val:stats.pending,color:"#6B7280"},
+          ].map(s=>(
+            <div key={s.label} style={{display:"flex",alignItems:"baseline",gap:6}}>
+              <span style={{fontSize:11,color:"#9CA3AF",fontWeight:600}}>{s.label}</span>
+              <span style={{fontSize:18,color:s.color,fontWeight:900}}>{s.val}</span>
+              <span style={{fontSize:10,color:"#9CA3AF"}}>명</span>
+            </div>
+          ))}
+          <div style={{flex:1}}></div>
+          <span style={{fontSize:10,color:"#9CA3AF"}}>표시: {filtered.length}명</span>
+        </div>
+
+        {/* 필터 */}
+        <div style={{padding:"14px 28px",borderBottom:"1px solid #E5E7EB",display:"flex",gap:10,alignItems:"center"}}>
+          <input value={filter.search} onChange={e=>setFilter({...filter,search:e.target.value})} placeholder="🔍 이름/전공/키워드 검색..."
+            style={{flex:1,padding:"8px 12px",border:"1.5px solid #D1D5DB",borderRadius:8,fontSize:12,outline:"none",fontFamily:"inherit"}}
+            onFocus={e=>e.target.style.borderColor="#1565C0"} onBlur={e=>e.target.style.borderColor="#D1D5DB"} />
+          <input value={filter.major} onChange={e=>setFilter({...filter,major:e.target.value})} placeholder="전공 필터"
+            style={{width:140,padding:"8px 12px",border:"1.5px solid #D1D5DB",borderRadius:8,fontSize:12,outline:"none",fontFamily:"inherit"}} />
+          <select value={filter.admitted} onChange={e=>setFilter({...filter,admitted:e.target.value})}
+            style={{padding:"8px 12px",border:"1.5px solid #D1D5DB",borderRadius:8,fontSize:12,outline:"none",fontFamily:"inherit",background:"#fff"}}>
+            <option value="all">전체</option>
+            <option value="합격">✅ 합격만</option>
+            <option value="불합격">❌ 불합격만</option>
+            <option value="미정">⏳ 미정만</option>
+          </select>
+        </div>
+
+        {/* 학생 카드 그리드 */}
+        <div style={{flex:1,overflowY:"auto",padding:"18px 28px"}}>
+          {loading ? (
+            <div style={{textAlign:"center",padding:"60px 0",color:"#9CA3AF",fontSize:13}}>⏳ 학생 데이터 로딩 중...</div>
+          ) : filtered.length === 0 ? (
+            <div style={{textAlign:"center",padding:"60px 0",color:"#9CA3AF",fontSize:13}}>
+              {students.length === 0 ? "📭 저장된 학생이 없습니다.\n분석을 완료하면 여기에 누적됩니다." : "🔍 필터 조건에 맞는 학생이 없습니다."}
+            </div>
+          ) : (
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(320px,1fr))",gap:14}}>
+              {filtered.map(s => {
+                const badge = admittedBadge(s.admitted);
+                const dateStr = s.date ? new Date(s.date).toLocaleDateString("ko-KR",{year:"numeric",month:"2-digit",day:"2-digit"}) : "-";
+                return (
+                  <div key={s.id} style={{border:"1.5px solid #E5E7EB",borderRadius:12,padding:"14px 16px",background:"#fff",transition:"all 0.15s",cursor:"default"}}
+                    onMouseEnter={e=>{e.currentTarget.style.borderColor="#1565C0";e.currentTarget.style.boxShadow="0 4px 16px rgba(21,101,192,0.12)";}}
+                    onMouseLeave={e=>{e.currentTarget.style.borderColor="#E5E7EB";e.currentTarget.style.boxShadow="none";}}>
+                    {/* 상단: 이름 + 합격배지 */}
+                    <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:8,gap:8}}>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontSize:14,fontWeight:900,color:"#111827",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.name||"(이름없음)"}</div>
+                        <div style={{fontSize:11,color:"#1565C0",fontWeight:700,marginTop:2}}>🎯 {s.major||"-"}</div>
+                      </div>
+                      <span style={{padding:"3px 8px",background:badge.bg,color:badge.color,border:"1px solid "+badge.border,borderRadius:8,fontSize:10,fontWeight:800,whiteSpace:"nowrap"}}>{badge.label}</span>
+                    </div>
+                    {/* 중간: 메타정보 */}
+                    <div style={{display:"flex",gap:10,fontSize:10,color:"#6B7280",marginBottom:10,paddingBottom:10,borderBottom:"1px dashed #E5E7EB"}}>
+                      <span>📊 내신 <strong style={{color:"#374151"}}>{s.grades_avg||"-"}</strong></span>
+                      <span>📅 {dateStr}</span>
+                      <span>🎓 {s.curriculum||"-"}개정</span>
+                    </div>
+                    {/* 키워드 미리보기 (상위 5개) */}
+                    {s.keywords && s.keywords.length > 0 && (
+                      <div style={{marginBottom:10}}>
+                        <div style={{fontSize:9,color:"#9CA3AF",fontWeight:700,marginBottom:5,textTransform:"uppercase",letterSpacing:"0.05em"}}>주요 키워드</div>
+                        <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
+                          {s.keywords.slice(0,5).map((kw,i)=>(
+                            <span key={i} style={{padding:"2px 7px",background:"#EFF6FF",color:"#1D4ED8",borderRadius:6,fontSize:10,fontWeight:600}}>{kw}</span>
+                          ))}
+                          {s.keywords.length > 5 && <span style={{fontSize:10,color:"#9CA3AF",padding:"2px 4px"}}>+{s.keywords.length-5}</span>}
+                        </div>
+                      </div>
+                    )}
+                    {/* 액션 버튼 */}
+                    <div style={{display:"flex",gap:6}}>
+                      <button onClick={()=>onLoad(s)} disabled={!s.full_analysis}
+                        style={{flex:1,padding:"7px 0",borderRadius:7,border:"none",background:s.full_analysis?"#1565C0":"#E5E7EB",color:s.full_analysis?"#fff":"#9CA3AF",fontSize:11,fontWeight:800,cursor:s.full_analysis?"pointer":"not-allowed",fontFamily:"inherit"}}
+                        title={s.full_analysis?"분석 결과 다시 보기":"v24 이전 형식 (재로드 불가)"}>
+                        📥 다시 보기
+                      </button>
+                      <select value={s.admitted||"미정"} onChange={e=>onUpdateAdmitted(s.id, e.target.value==="미정"?null:e.target.value)}
+                        style={{padding:"5px 6px",border:"1.5px solid #D1D5DB",borderRadius:7,fontSize:10,fontWeight:700,outline:"none",fontFamily:"inherit",background:"#fff",cursor:"pointer"}}>
+                        <option value="미정">⏳ 미정</option>
+                        <option value="합격">✅ 합격</option>
+                        <option value="불합격">❌ 불합격</option>
+                      </select>
+                      <button onClick={()=>onDelete(s.id)}
+                        style={{padding:"7px 9px",borderRadius:7,border:"1.5px solid #FCA5A5",background:"#fff",color:"#B91C1C",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}
+                        title="삭제">🗑️</button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function PassAnalysisTab({ major, data }) {
   const match = React.useMemo(() => findDeptMatch(major), [major]);
   const [filterType, setFilterType] = useState("all"); // all | 종합 | 교과
@@ -3770,6 +4010,13 @@ export default function HaksenbuAnalyzer() {
   const [showProjectMgr, setShowProjectMgr] = useState(false);
   const [scoreData, setScoreData] = useState(null); // 학생부 점수화 모델
   const [activeProject, setActiveProject] = useState(null);
+  // ── v25 신규 state: 학생 DB / 저장 다이얼로그 ──
+  const [showSaveDialog, setShowSaveDialog] = useState(false); // 분석 완료 후 저장 다이얼로그
+  const [pendingSaveData, setPendingSaveData] = useState(null); // 저장 대기 중인 분석 데이터
+  const [showStudentDB, setShowStudentDB] = useState(false); // 학생 DB 모달
+  const [studentList, setStudentList] = useState([]); // 저장된 학생 목록
+  const [dbLoading, setDbLoading] = useState(false); // DB 로딩 상태
+  const [dbFilter, setDbFilter] = useState({ major: "", admitted: "all", search: "" }); // DB 필터
   const svgRef = useRef(null);
   const svgCacheRef = useRef(""); // drawNetwork 완료 후 SVG 캐시
   const simRef = useRef(null);
@@ -4510,7 +4757,8 @@ export default function HaksenbuAnalyzer() {
 
 const RAILWAY_URL = "https://modenedu-production.up.railway.app";
 
-  const saveStudentData = async (parsedData, studentName, major, curriculum) => {
+  // ── v25: 분석 결과 저장 (admitted 파라미터 포함) ──
+  const saveStudentData = async (parsedData, name, majorVal, currVal, admitted = null) => {
     try {
       const keywords = (parsedData.keywords || []).map(k => k.id);
       const topics = (parsedData.summary?.탐구주제 || []).map(t => t.title);
@@ -4521,20 +4769,100 @@ const RAILWAY_URL = "https://modenedu-production.up.railway.app";
       const res = await fetch(RAILWAY_URL + "/api/students", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: studentName||"이름없음", major, curriculum, grades_avg: gradesAvg, keywords, topics, activities, books })
+        body: JSON.stringify({
+          name: name||"이름없음",
+          major: majorVal,
+          curriculum: currVal,
+          grades_avg: gradesAvg,
+          keywords, topics, activities, books,
+          admitted, // v25: "합격"/"불합격"/null
+          full_analysis: parsedData, // v25: 전체 분석 결과 저장 (재로드용)
+        })
       });
       const result = await res.json();
-      if (result.ok) console.log("✅ 학생 저장 완료 (누적:", result.total, "명)");
-    } catch(e) { console.warn("저장 실패 (분석은 정상):", e.message); }
+      if (result.ok) {
+        console.log("✅ 학생 저장 완료 (누적:", result.total, "명)");
+        return { ok: true, total: result.total };
+      }
+      return { ok: false, error: "저장 실패" };
+    } catch(e) {
+      console.warn("저장 실패:", e.message);
+      return { ok: false, error: e.message };
+    }
   };
 
-  const loadPastStudents = async (major) => {
+  const loadPastStudents = async (majorVal) => {
     try {
-      const res = await fetch(RAILWAY_URL + "/api/students?major=" + encodeURIComponent(major) + "&limit=10");
+      const res = await fetch(RAILWAY_URL + "/api/students?major=" + encodeURIComponent(majorVal) + "&limit=10");
       const result = await res.json();
       if (result.ok && result.students.length > 0) return result.students;
     } catch(e) { console.warn("과거 데이터 로드 실패:", e.message); }
     return [];
+  };
+
+  // ── v25 신규: 전체 학생 목록 가져오기 ──
+  const fetchStudentList = async () => {
+    setDbLoading(true);
+    try {
+      const res = await fetch(RAILWAY_URL + "/api/students");
+      const result = await res.json();
+      if (result.ok) {
+        // 최신순 정렬
+        const sorted = (result.students || []).sort((a,b) => (b.id||0) - (a.id||0));
+        setStudentList(sorted);
+      }
+    } catch(e) {
+      console.warn("학생 목록 로드 실패:", e.message);
+      setStudentList([]);
+    } finally {
+      setDbLoading(false);
+    }
+  };
+
+  // ── v25 신규: 합격여부 업데이트 ──
+  const updateAdmitted = async (studentId, admitted) => {
+    try {
+      const res = await fetch(RAILWAY_URL + "/api/students/" + studentId, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ admitted })
+      });
+      const result = await res.json();
+      if (result.ok) {
+        // 로컬 상태 즉시 업데이트
+        setStudentList(prev => prev.map(s => s.id === studentId ? { ...s, admitted } : s));
+        return true;
+      }
+    } catch(e) { console.warn("업데이트 실패:", e.message); }
+    return false;
+  };
+
+  // ── v25 신규: 학생 삭제 ──
+  const deleteStudent = async (studentId) => {
+    if (!confirm("이 학생 분석 데이터를 삭제하시겠어요? (복구 불가)")) return;
+    try {
+      const res = await fetch(RAILWAY_URL + "/api/students/" + studentId, { method: "DELETE" });
+      const result = await res.json();
+      if (result.ok) {
+        setStudentList(prev => prev.filter(s => s.id !== studentId));
+      }
+    } catch(e) { console.warn("삭제 실패:", e.message); }
+  };
+
+  // ── v25 신규: 저장된 학생 클릭 → 분석 결과 재로드 ──
+  const loadStudentToView = (student) => {
+    if (!student.full_analysis) {
+      alert("이 학생은 v24 이전 형식으로 저장되어 전체 분석 결과를 불러올 수 없습니다.\n키워드/활동 정보는 DB 화면에서 확인 가능합니다.");
+      return;
+    }
+    setData(student.full_analysis);
+    setMajor(student.major || "");
+    setStudentName(student.name || "");
+    setCurriculum(student.curriculum || "2015");
+    if (student.full_analysis.score) setScoreData(student.full_analysis.score);
+    setShowStudentDB(false);
+    setPage("result");
+    setActiveTab("network");
   };
 
     const readPdf = (file) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result.split(",")[1]); r.onerror = rej; r.readAsDataURL(file); });
@@ -4772,7 +5100,9 @@ const RAILWAY_URL = "https://modenedu-production.up.railway.app";
         });
       }
       setData(parsed); setPage("result");
-      saveStudentData(parsed, studentName, major, curriculum);
+      // v25: 자동 저장 → 저장 다이얼로그 띄우기로 변경
+      setPendingSaveData({ parsed, name: studentName, major, curriculum });
+      setShowSaveDialog(true);
       // score 파싱 저장
       if (parsed.score) setScoreData(parsed.score);
     } catch(err) { setError("⚠️ JSON 파싱 오류가 발생했습니다. 아래 방법을 시도해보세요:\n" +
@@ -4962,12 +5292,29 @@ const RAILWAY_URL = "https://modenedu-production.up.railway.app";
   if (page === "input") return (
     <>
     {showProjectMgr && <KeywordProjectManager major={major} onClose={()=>setShowProjectMgr(false)} onApply={proj=>setActiveProject(proj)} />}
+    {showStudentDB && (
+      <StudentDBModal
+        students={studentList}
+        loading={dbLoading}
+        onClose={()=>setShowStudentDB(false)}
+        onLoad={loadStudentToView}
+        onUpdateAdmitted={updateAdmitted}
+        onDelete={deleteStudent}
+        onRefresh={fetchStudentList}
+      />
+    )}
     <div style={{minHeight:"100vh",background:"linear-gradient(155deg,#f0f4ff,#e8f4ff 50%,#f0f8f4)",fontFamily:"Noto Sans KR,Apple SD Gothic Neo,sans-serif"}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 36px",background:"#fff",borderBottom:"1.5px solid #e0e8f0",boxShadow:"0 2px 12px rgba(0,0,0,0.06)"}}>
         <span style={{fontWeight:900,fontSize:18,color:"#1565C0",letterSpacing:"-0.5px"}}>모든에듀케이션</span>
-        <div style={{display:"flex",alignItems:"center",gap:10}}>
-          <div style={{width:8,height:8,borderRadius:"50%",background:"#1565C0"}} />
-          <span style={{color:"#1565C0",fontSize:15,fontWeight:800}}>아펙스컨설팅팀 박정호</span>
+        <div style={{display:"flex",alignItems:"center",gap:14}}>
+          <button onClick={()=>{ setShowStudentDB(true); fetchStudentList(); }}
+            style={{padding:"8px 14px",background:"linear-gradient(135deg,#7C3AED,#5B21B6)",border:"none",borderRadius:9,color:"#fff",fontSize:12,fontWeight:800,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 2px 10px rgba(124,58,237,0.3)",display:"flex",alignItems:"center",gap:6}}>
+            📚 학생 분석 DB
+          </button>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <div style={{width:8,height:8,borderRadius:"50%",background:"#1565C0"}} />
+            <span style={{color:"#1565C0",fontSize:15,fontWeight:800}}>아펙스컨설팅팀 박정호</span>
+          </div>
         </div>
       </div>
       <div style={{display:"flex",flexDirection:"column",alignItems:"center",padding:"48px 24px"}}>
@@ -4976,7 +5323,7 @@ const RAILWAY_URL = "https://modenedu-production.up.railway.app";
             <div style={{display:"inline-flex",alignItems:"center",gap:8,background:"#EFF6FF",border:"1px solid #BFDBFE",borderRadius:20,padding:"6px 18px",marginBottom:16}}>
               <span style={{color:"#1D4ED8",fontSize:12,fontWeight:700}}>모든에듀 AI 학생부 분석 시스템</span>
             </div>
-            <h1 style={{margin:"0 0 12px",fontSize:34,fontWeight:900,color:"#111827",lineHeight:1.2,letterSpacing:"-0.03em"}}>키워드 네트워크 분석기 <span style={{fontSize:13,fontWeight:700,color:"#fff",background:"#1D4ED8",borderRadius:6,padding:"2px 8px",verticalAlign:"middle",letterSpacing:0}}>v24</span></h1>
+            <h1 style={{margin:"0 0 12px",fontSize:34,fontWeight:900,color:"#111827",lineHeight:1.2,letterSpacing:"-0.03em"}}>키워드 네트워크 분석기 <span style={{fontSize:13,fontWeight:700,color:"#fff",background:"#1D4ED8",borderRadius:6,padding:"2px 8px",verticalAlign:"middle",letterSpacing:0}}>v25</span></h1>
             <p style={{color:"#6B7280",fontSize:14,lineHeight:1.85,margin:0}}>학생부 PDF를 업로드하면 AI가 핵심 키워드를 추출하고<br/>목표 전공 기반 네트워크로 시각화합니다</p>
           </div>
           <div style={{background:"#fff",border:"1.5px solid #E5EDF5",borderRadius:20,padding:"34px 30px",boxShadow:"0 6px 30px rgba(0,0,0,0.08)"}}>
@@ -5086,6 +5433,42 @@ const RAILWAY_URL = "https://modenedu-production.up.railway.app";
       {/* 인쇄 컴포넌트 (화면에서는 숨김, 인쇄 시 표시) */}
       <PrintSheet data={data} major={major} studentName={studentName} curriculum={curriculum} visible={printing} />
 
+      {/* v25: 분석 완료 후 저장 다이얼로그 */}
+      {showSaveDialog && pendingSaveData && (
+        <SaveAnalysisDialog
+          defaultName={pendingSaveData.name}
+          defaultMajor={pendingSaveData.major}
+          onSave={async (name, admitted) => {
+            const result = await saveStudentData(pendingSaveData.parsed, name, pendingSaveData.major, pendingSaveData.curriculum, admitted);
+            setShowSaveDialog(false);
+            setPendingSaveData(null);
+            if (result.ok) {
+              setStudentName(name); // 메인 state도 업데이트
+              alert(`✅ 저장 완료!\n현재 누적: ${result.total}명`);
+            } else {
+              alert(`⚠️ 저장 실패: ${result.error}\n분석 결과는 화면에 그대로 유지됩니다.`);
+            }
+          }}
+          onSkip={() => {
+            setShowSaveDialog(false);
+            setPendingSaveData(null);
+          }}
+        />
+      )}
+
+      {/* v25: 학생 DB 모달 */}
+      {showStudentDB && (
+        <StudentDBModal
+          students={studentList}
+          loading={dbLoading}
+          onClose={()=>setShowStudentDB(false)}
+          onLoad={loadStudentToView}
+          onUpdateAdmitted={updateAdmitted}
+          onDelete={deleteStudent}
+          onRefresh={fetchStudentList}
+        />
+      )}
+
       {/* 탑바 */}
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 14px",height:58,background:"#fff",borderBottom:"1.5px solid #E5E7EB",boxShadow:"0 1px 8px rgba(0,0,0,0.06)",flexShrink:0,gap:8}}>
         <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
@@ -5101,6 +5484,10 @@ const RAILWAY_URL = "https://modenedu-production.up.railway.app";
           <button onClick={handlePrint} disabled={printing}
             style={{padding:"7px 14px",background:printing?"#9CA3AF":"linear-gradient(135deg,#1565C0,#0277BD)",border:"none",borderRadius:8,color:"#fff",fontSize:12,fontWeight:700,cursor:printing?"not-allowed":"pointer",fontFamily:"inherit",whiteSpace:"nowrap",boxShadow:"0 2px 8px rgba(21,101,192,0.3)"}}>
             {printing ? "⏳ AI 추천 생성 중..." : "🖨️ 출력 / 저장"}
+          </button>
+          <button onClick={()=>{ setShowStudentDB(true); fetchStudentList(); }}
+            style={{padding:"7px 12px",background:"linear-gradient(135deg,#7C3AED,#5B21B6)",border:"none",borderRadius:8,color:"#fff",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",boxShadow:"0 2px 8px rgba(124,58,237,0.3)"}}>
+            📚 DB
           </button>
           <div style={{display:"flex",gap:2,background:"#F3F4F6",borderRadius:9,padding:3}}>
             {[{key:"network",label:"🕸 키워드"},{key:"summary",label:"📋 활동"},{key:"grades",label:"📊 내신"},{key:"recommend",label:"💡 탐구추천"},...(curriculum!=="2022"?[{key:"pass",label:"🏆 합격분석"}]:[])].map(tab=>(
