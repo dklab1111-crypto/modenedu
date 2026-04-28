@@ -36,7 +36,7 @@ try {
     const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY);
     const auth = new google.auth.GoogleAuth({
       credentials,
-      scopes: ['https://www.googleapis.com/auth/drive.file'],
+      scopes: ['https://www.googleapis.com/auth/drive'],
     });
     drive = google.drive({ version: 'v3', auth });
     driveEnabled = true;
@@ -123,6 +123,7 @@ async function saveToDrive(data) {
     if (fileId) {
       // 업데이트
       await drive.files.update({ fileId, media });
+      console.log('✅ Drive 업데이트 성공 (fileId:', fileId.slice(0, 8), '...)');
     } else {
       // 새로 생성
       const res = await drive.files.create({
@@ -135,10 +136,14 @@ async function saveToDrive(data) {
         fields: 'id',
       });
       cachedFileId = res.data.id;
+      console.log('✅ Drive 신규 생성 성공 (fileId:', cachedFileId.slice(0, 8), '...)');
     }
     return true;
   } catch (e) {
-    console.error('Drive 쓰기 실패:', e.message);
+    console.error('❌ Drive 쓰기 실패:');
+    console.error('   메시지:', e.message);
+    console.error('   코드:', e.code);
+    console.error('   상세:', e.errors ? JSON.stringify(e.errors) : 'N/A');
     return false;
   }
 }
