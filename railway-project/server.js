@@ -1,19 +1,18 @@
 // ════════════════════════════════════════════════════════════════════
-// 모든에듀 학생부 분석기 server.js v25
+// 모든에듀 학생부 분석기 server.js v25.1
 // ────────────────────────────────────────────────────────────────────
-// v24 → v25 변경사항:
-// 1. Google Drive 백엔드 저장소 통합 (영구 보관)
-// 2. 메모리 캐시 (5분 TTL) — Drive 호출 최소화
-// 3. 로컬 파일 fallback (Drive 실패 시 자동 전환)
-// 4. 기존 API 시그니처 100% 호환 (프론트엔드 변경 불필요)
+// v25 → v25.1 변경사항:
+// 1. Google Drive → Railway PostgreSQL로 변경
+//    (서비스 계정 storage quota 문제 회피)
+// 2. 영구 보존 + 빠른 검색 + 1만명+ 처리 가능
+// 3. v25 프론트엔드와 100% 호환 (API 시그니처 동일)
 // ════════════════════════════════════════════════════════════════════
 
 const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
-const { google } = require('googleapis');
-const { Readable } = require('stream');
+const { Pool } = require('pg');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -23,36 +22,61 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.static(path.join(__dirname, 'dist')));
 
 // ══════════════════════════════════════════
-// Google Drive 클라이언트 초기화
+// PostgreSQL 클라이언트 초기화
 // ══════════════════════════════════════════
-let drive = null;
-let driveEnabled = false;
-const DRIVE_FOLDER_ID = process.env.DRIVE_FOLDER_ID || '';
-const DB_FILENAME = 'students.json';
-let cachedFileId = null; // students.json 파일의 Drive ID 캐시
+let pool = null;
+let dbEnabled = false;
 
-try {
-  if (process.env.GOOGLE_SERVICE_ACCOUNT_KEY && DRIVE_FOLDER_ID) {
-    const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY);
-    const auth = new google.auth.GoogleAuth({
-      credentials,
-      scopes: ['https://www.googleapis.com/auth/drive'],
-    });
-    drive = google.drive({ version: 'v3', auth });
-    driveEnabled = true;
-    console.log('✅ Google Drive 연동 활성화');
-    console.log('   📁 폴더 ID:', DRIVE_FOLDER_ID);
-    console.log('   🤖 서비스 계정:', credentials.client_email);
-  } else {
-    console.warn('⚠️ Google Drive 비활성화 (환경변수 없음) - 로컬 파일 모드로 동작');
-  }
-} catch (e) {
-  console.error('❌ Google Drive 초기화 실패:', e.message);
-  console.warn('   → 로컬 파일 모드로 fallback');
+if (process.env.DATABASE_URL) {
+  pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false }, // Railway는 SSL 필수
+  });
+  dbEnabled = true;
+  console.log('✅ PostgreSQL 연결 활성화');
+  console.log('   📊 DATABASE_URL: 등록됨');
+} else {
+  console.warn('⚠️ DATABASE_URL 없음 - 로컬 파일 모드로 fallback');
 }
 
 // ══════════════════════════════════════════
-// 로컬 파일 fallback 경로
+// 테이블 자동 생성 (서버 시작 시 1회)
+// ══════════════════════════════════════════
+async function initDatabase() {
+  if (!dbEnabled) return;
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS students (
+        id BIGINT PRIMARY KEY,
+        date TEXT,
+        name TEXT,
+        major TEXT,
+        curriculum TEXT,
+        grades_avg TEXT,
+        keywords JSONB,
+        topics JSONB,
+        activities JSONB,
+        books JSONB,
+        admitted TEXT,
+        full_analysis JSONB,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_students_major ON students(major);
+    `);
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_students_admitted ON students(admitted);
+    `);
+    console.log('✅ students 테이블 준비 완료');
+  } catch (e) {
+    console.error('❌ 테이블 초기화 실패:', e.message);
+    dbEnabled = false;
+  }
+}
+
+// ══════════════════════════════════════════
+// 로컬 파일 fallback
 // ══════════════════════════════════════════
 const LOCAL_DB_PATH = path.join(__dirname, 'students.json');
 
@@ -61,108 +85,41 @@ const LOCAL_DB_PATH = path.join(__dirname, 'students.json');
 // ══════════════════════════════════════════
 let memCache = null;
 let memCacheTime = 0;
-const CACHE_TTL = 5 * 60 * 1000; // 5분
+const CACHE_TTL = 5 * 60 * 1000;
 
 // ══════════════════════════════════════════
-// Drive 파일 ID 검색 (students.json)
-// ══════════════════════════════════════════
-async function findDriveFileId() {
-  if (cachedFileId) return cachedFileId;
-  try {
-    const res = await drive.files.list({
-      q: `name='${DB_FILENAME}' and '${DRIVE_FOLDER_ID}' in parents and trashed=false`,
-      fields: 'files(id, name)',
-      pageSize: 1,
-    });
-    if (res.data.files.length > 0) {
-      cachedFileId = res.data.files[0].id;
-      return cachedFileId;
-    }
-    return null;
-  } catch (e) {
-    console.error('Drive 파일 검색 실패:', e.message);
-    return null;
-  }
-}
-
-// ══════════════════════════════════════════
-// Drive에서 students.json 읽기
-// ══════════════════════════════════════════
-async function loadFromDrive() {
-  if (!driveEnabled) return null;
-  try {
-    const fileId = await findDriveFileId();
-    if (!fileId) {
-      console.log('📭 Drive에 students.json 없음 → 빈 배열 반환');
-      return [];
-    }
-    const res = await drive.files.get(
-      { fileId, alt: 'media' },
-      { responseType: 'text' }
-    );
-    const data = typeof res.data === 'string' ? JSON.parse(res.data) : res.data;
-    return Array.isArray(data) ? data : [];
-  } catch (e) {
-    console.error('Drive 읽기 실패:', e.message);
-    return null;
-  }
-}
-
-// ══════════════════════════════════════════
-// Drive에 students.json 쓰기 (생성 or 업데이트)
-// ══════════════════════════════════════════
-async function saveToDrive(data) {
-  if (!driveEnabled) return false;
-  try {
-    const content = JSON.stringify(data, null, 2);
-    const fileId = await findDriveFileId();
-    const media = {
-      mimeType: 'application/json',
-      body: Readable.from([content]),
-    };
-    if (fileId) {
-      // 업데이트
-      await drive.files.update({ fileId, media });
-      console.log('✅ Drive 업데이트 성공 (fileId:', fileId.slice(0, 8), '...)');
-    } else {
-      // 새로 생성
-      const res = await drive.files.create({
-        requestBody: {
-          name: DB_FILENAME,
-          parents: [DRIVE_FOLDER_ID],
-          mimeType: 'application/json',
-        },
-        media,
-        fields: 'id',
-      });
-      cachedFileId = res.data.id;
-      console.log('✅ Drive 신규 생성 성공 (fileId:', cachedFileId.slice(0, 8), '...)');
-    }
-    return true;
-  } catch (e) {
-    console.error('❌ Drive 쓰기 실패:');
-    console.error('   메시지:', e.message);
-    console.error('   코드:', e.code);
-    console.error('   상세:', e.errors ? JSON.stringify(e.errors) : 'N/A');
-    return false;
-  }
-}
-
-// ══════════════════════════════════════════
-// 통합 DB I/O (Drive 우선, 로컬 fallback)
+// DB I/O 통합 함수
 // ══════════════════════════════════════════
 async function loadDB() {
   // 캐시 hit
   if (memCache && Date.now() - memCacheTime < CACHE_TTL) {
     return memCache;
   }
-  // Drive 시도
-  if (driveEnabled) {
-    const driveData = await loadFromDrive();
-    if (driveData !== null) {
-      memCache = driveData;
+  // PostgreSQL 시도
+  if (dbEnabled) {
+    try {
+      const result = await pool.query(
+        'SELECT * FROM students ORDER BY id ASC'
+      );
+      const students = result.rows.map(row => ({
+        id: parseInt(row.id),
+        date: row.date,
+        name: row.name,
+        major: row.major,
+        curriculum: row.curriculum,
+        grades_avg: row.grades_avg,
+        keywords: row.keywords || [],
+        topics: row.topics || [],
+        activities: row.activities || [],
+        books: row.books || [],
+        admitted: row.admitted,
+        full_analysis: row.full_analysis,
+      }));
+      memCache = students;
       memCacheTime = Date.now();
-      return driveData;
+      return students;
+    } catch (e) {
+      console.error('❌ DB 읽기 실패:', e.message);
     }
   }
   // 로컬 fallback
@@ -178,26 +135,131 @@ async function loadDB() {
   }
 }
 
-async function saveDB(data) {
-  // 캐시 즉시 갱신
-  memCache = data;
-  memCacheTime = Date.now();
-  // Drive 저장 시도
-  let driveSuccess = false;
-  if (driveEnabled) {
-    driveSuccess = await saveToDrive(data);
-  }
-  // 로컬에도 백업 (fallback)
-  try {
+async function insertStudent(student) {
+  if (!dbEnabled) {
+    const data = await loadDB();
+    data.push(student);
     fs.writeFileSync(LOCAL_DB_PATH, JSON.stringify(data, null, 2));
-  } catch (e) {
-    console.error('로컬 백업 실패:', e.message);
+    memCache = data;
+    memCacheTime = Date.now();
+    return { db: false, local: true };
   }
-  return { drive: driveSuccess, local: true };
+  try {
+    await pool.query(
+      `INSERT INTO students (id, date, name, major, curriculum, grades_avg, keywords, topics, activities, books, admitted, full_analysis)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+       ON CONFLICT (id) DO UPDATE SET
+         name = EXCLUDED.name,
+         major = EXCLUDED.major,
+         curriculum = EXCLUDED.curriculum,
+         grades_avg = EXCLUDED.grades_avg,
+         keywords = EXCLUDED.keywords,
+         topics = EXCLUDED.topics,
+         activities = EXCLUDED.activities,
+         books = EXCLUDED.books,
+         admitted = EXCLUDED.admitted,
+         full_analysis = EXCLUDED.full_analysis`,
+      [
+        student.id,
+        student.date,
+        student.name,
+        student.major,
+        student.curriculum,
+        student.grades_avg,
+        JSON.stringify(student.keywords || []),
+        JSON.stringify(student.topics || []),
+        JSON.stringify(student.activities || []),
+        JSON.stringify(student.books || []),
+        student.admitted,
+        JSON.stringify(student.full_analysis || null),
+      ]
+    );
+    memCache = null;
+    console.log(`✅ 학생 저장 완료: ${student.name} (id: ${student.id})`);
+    return { db: true, local: false };
+  } catch (e) {
+    console.error('❌ DB 쓰기 실패:');
+    console.error('   메시지:', e.message);
+    console.error('   코드:', e.code);
+    return { db: false, local: false, error: e.message };
+  }
+}
+
+async function updateStudent(id, updates) {
+  if (!dbEnabled) {
+    const data = await loadDB();
+    const idx = data.findIndex(s => s.id === id);
+    if (idx === -1) return false;
+    data[idx] = { ...data[idx], ...updates };
+    fs.writeFileSync(LOCAL_DB_PATH, JSON.stringify(data, null, 2));
+    memCache = data;
+    memCacheTime = Date.now();
+    return true;
+  }
+  try {
+    const fields = [];
+    const values = [];
+    let i = 1;
+    for (const [key, val] of Object.entries(updates)) {
+      const isJson = ['keywords', 'topics', 'activities', 'books', 'full_analysis'].includes(key);
+      fields.push(`${key} = $${i}`);
+      values.push(isJson ? JSON.stringify(val) : val);
+      i++;
+    }
+    values.push(id);
+    await pool.query(
+      `UPDATE students SET ${fields.join(', ')} WHERE id = $${i}`,
+      values
+    );
+    memCache = null;
+    return true;
+  } catch (e) {
+    console.error('❌ DB 업데이트 실패:', e.message);
+    return false;
+  }
+}
+
+async function deleteStudentById(id) {
+  if (!dbEnabled) {
+    const data = await loadDB();
+    const idx = data.findIndex(s => s.id === id);
+    if (idx === -1) return false;
+    data.splice(idx, 1);
+    fs.writeFileSync(LOCAL_DB_PATH, JSON.stringify(data, null, 2));
+    memCache = data;
+    memCacheTime = Date.now();
+    return true;
+  }
+  try {
+    const result = await pool.query('DELETE FROM students WHERE id = $1', [id]);
+    memCache = null;
+    return result.rowCount > 0;
+  } catch (e) {
+    console.error('❌ DB 삭제 실패:', e.message);
+    return false;
+  }
+}
+
+async function deleteAllStudents() {
+  if (!dbEnabled) {
+    fs.writeFileSync(LOCAL_DB_PATH, '[]');
+    memCache = [];
+    memCacheTime = Date.now();
+    return true;
+  }
+  try {
+    await pool.query('DELETE FROM students');
+    memCache = [];
+    memCacheTime = Date.now();
+    return true;
+  } catch (e) {
+    console.error('❌ DB 전체 삭제 실패:', e.message);
+    return false;
+  }
 }
 
 // ══════════════════════════════════════════
-// Claude API 프록시 (CORS 우회) — 기존 그대로
+// Claude API 프록시 — 기존 유지
 // ══════════════════════════════════════════
 app.post('/api/claude', async (req, res) => {
   try {
@@ -224,13 +286,11 @@ app.post('/api/claude', async (req, res) => {
 });
 
 // ══════════════════════════════════════════
-// 학생 데이터 API (Drive 통합 버전)
+// 학생 데이터 API (PostgreSQL 버전)
 // ══════════════════════════════════════════
 
-// 학생 데이터 저장
 app.post('/api/students', async (req, res) => {
   try {
-    const students = await loadDB();
     const student = {
       id: Date.now(),
       date: new Date().toISOString(),
@@ -243,13 +303,14 @@ app.post('/api/students', async (req, res) => {
       activities: req.body.activities || [],
       books: req.body.books || [],
       admitted: req.body.admitted || null,
+      full_analysis: req.body.full_analysis || null,
     };
-    students.push(student);
-    const saveResult = await saveDB(students);
+    const saveResult = await insertStudent(student);
+    const all = await loadDB();
     res.json({
       ok: true,
       id: student.id,
-      total: students.length,
+      total: all.length,
       storage: saveResult,
     });
   } catch (e) {
@@ -258,7 +319,6 @@ app.post('/api/students', async (req, res) => {
   }
 });
 
-// 전체 학생 목록 조회 (전공 필터 가능)
 app.get('/api/students', async (req, res) => {
   try {
     const students = await loadDB();
@@ -279,14 +339,11 @@ app.get('/api/students', async (req, res) => {
   }
 });
 
-// 합격여부 업데이트 (또는 다른 필드)
 app.patch('/api/students/:id', async (req, res) => {
   try {
-    const students = await loadDB();
-    const idx = students.findIndex((s) => s.id === parseInt(req.params.id));
-    if (idx === -1) return res.status(404).json({ ok: false });
-    students[idx] = { ...students[idx], ...req.body };
-    await saveDB(students);
+    const id = parseInt(req.params.id);
+    const success = await updateStudent(id, req.body);
+    if (!success) return res.status(404).json({ ok: false });
     res.json({ ok: true });
   } catch (e) {
     console.error('PATCH /api/students error:', e);
@@ -294,44 +351,37 @@ app.patch('/api/students/:id', async (req, res) => {
   }
 });
 
-// 단일 학생 삭제 (신규)
 app.delete('/api/students/:id', async (req, res) => {
   try {
-    const students = await loadDB();
-    const idx = students.findIndex((s) => s.id === parseInt(req.params.id));
-    if (idx === -1) return res.status(404).json({ ok: false });
-    students.splice(idx, 1);
-    await saveDB(students);
-    res.json({ ok: true, total: students.length });
+    const id = parseInt(req.params.id);
+    const success = await deleteStudentById(id);
+    if (!success) return res.status(404).json({ ok: false });
+    const all = await loadDB();
+    res.json({ ok: true, total: all.length });
   } catch (e) {
     console.error('DELETE /api/students/:id error:', e);
     res.status(500).json({ ok: false, error: e.message });
   }
 });
 
-// 전체 삭제 (관리용)
 app.delete('/api/students', async (req, res) => {
-  await saveDB([]);
+  await deleteAllStudents();
   res.json({ ok: true });
 });
 
 // ══════════════════════════════════════════
-// 헬스체크 & 진단 엔드포인트 (신규)
+// 헬스체크 & 진단
 // ══════════════════════════════════════════
 app.get('/api/health', async (req, res) => {
   try {
     const students = await loadDB();
     res.json({
       ok: true,
-      version: 'v25',
-      drive: {
-        enabled: driveEnabled,
-        folderId: DRIVE_FOLDER_ID
-          ? DRIVE_FOLDER_ID.slice(0, 8) + '...'
-          : null,
-        fileId: cachedFileId
-          ? cachedFileId.slice(0, 8) + '...'
-          : null,
+      version: 'v25.1',
+      storage_type: dbEnabled ? 'PostgreSQL' : 'Local file (fallback)',
+      database: {
+        enabled: dbEnabled,
+        connected: dbEnabled ? '✅' : '❌',
       },
       storage: {
         totalStudents: students.length,
@@ -347,13 +397,17 @@ app.get('/api/health', async (req, res) => {
 });
 
 // ══════════════════════════════════════════
-// SPA 라우팅 (React 앱)
+// SPA 라우팅
 // ══════════════════════════════════════════
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
-app.listen(PORT, () => {
-  console.log(`✅ 모든에듀 학생부 분석기 v25 실행 중: http://localhost:${PORT}`);
-  console.log(`   💾 저장소: ${driveEnabled ? 'Google Drive + 로컬 백업' : '로컬 파일 only'}`);
+// ══════════════════════════════════════════
+// 서버 시작
+// ══════════════════════════════════════════
+app.listen(PORT, async () => {
+  console.log(`✅ 모든에듀 학생부 분석기 v25.1 실행 중: http://localhost:${PORT}`);
+  await initDatabase();
+  console.log(`   💾 저장소: ${dbEnabled ? 'PostgreSQL (영구 보존)' : '로컬 파일 (fallback)'}`);
 });
