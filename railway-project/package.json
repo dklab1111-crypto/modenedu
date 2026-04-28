@@ -1,19 +1,21 @@
 {
-  "name": "modenedu-haksenbu-analyzer",
-  "version": "25.0.0",
-  "description": "모든에듀 AI 학생부 분석기 — Google Drive 통합 버전",
-  "main": "server.js",
+  "name": "haksenbu-analyzer",
+  "version": "1.0.0",
   "scripts": {
     "start": "node server.js",
-    "build": "echo 'No build step (single JSX file)'",
-    "dev": "node server.js"
+    "build": "npm install && npx vite build"
   },
   "dependencies": {
     "express": "^4.18.2",
     "cors": "^2.8.5",
     "googleapis": "^131.0.0"
   },
-  "engines": {
-    "node": ">=18.0.0"
-  }
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.0.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "d3": "^7.8.5",
+    "vite": "^4.4.0"
+  },
+  "engines": { "node": ">=18" }
 }
