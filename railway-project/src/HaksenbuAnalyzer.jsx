@@ -4993,6 +4993,12 @@ const RAILWAY_URL = "https://modenedu-production.up.railway.app";
       + "\n  ④ [v26+] 원점수와 grade가 모순되면(예: 원점수 99 vs grade 4) → 즉시 재추출"
       + "\n⚠️ [1학기·2학기 병합 금지] 국어·수학·영어 등 양 학기 모두 수강하는 과목은 반드시 1학기(semester:1)와 2학기(semester:2) 두 개 항목으로 분리 추출. 동일 과목을 단위수 합산(예: units:8)한 단일 항목으로 합치는 것은 오류다. 예: 국어 1학기 4단위+2학기 4단위 → {subject:'국어',year:1,semester:1,units:4,...}, {subject:'국어',year:1,semester:2,units:4,...} 두 항목이 맞음."
       + "\n⚠️⚠️ [성적 추출 최우선] 성적표 데이터가 가장 중요합니다. 반드시 모든 과목의 석차등급을 추출하세요. 빈 등급란도 해당 과목 행이 실제로 있으면 포함하세요."
+      + "\n🔥🔥🔥 [v26+ 절대 규칙 — 전 학년 빠짐없이 추출] 학생부에는 1학년, 2학년, 3학년 성적표가 모두 들어있을 수 있다. 1학년만 추출하고 끝내지 말 것! 다음 절차를 엄수:"
+      + "\n  STEP 1: 학생부 전체를 끝까지 스캔하여 [1학년], [2학년], [3학년] 성적표 섹션이 각각 몇 개 있는지 먼저 파악"
+      + "\n  STEP 2: 각 학년의 1학기·2학기 성적표를 모두 별도 항목으로 추출 (학년 누락 절대 금지)"
+      + "\n  STEP 3: 추출 완료 후 자가 검증: subject_grades 배열에 year:1, year:2, year:3 항목이 모두 있는지 확인"
+      + "\n  ※ N수생/졸업생 학생부는 보통 1·2·3학년 모두 있음. 1학년만 있는 경우는 재학생(고1)에 한함"
+      + "\n  ※ 진로선택과목·체육예술·교양과목은 grade 추출 대상이 아니지만, 일반과목은 모든 학년 모두 추출"
       + "\n⚠️ [페이지 분리 주의] 성적표 테이블은 PDF 페이지 경계에서 잘릴 수 있다. 다음 페이지에서 표 헤더 없이 과목 행이 이어지면 이전 페이지와 동일한 학년·학기 테이블이 계속되는 것이므로 반드시 포함. 어떤 과목도 누락하지 말 것."
       + "\n⚠️ [2022개정 학기 배정 핵심 규칙] 학생부 성적표에서 '학기' 컬럼의 값(1 또는 2)은 반드시 semester 필드에 넣어야 한다. year 필드는 해당 표가 속한 학년(1학년=1, 2학년=2, 3학년=3)이다. 학기 컬럼 값을 year로 쓰지 말 것. 예: 1학년 성적표에서 학기2행의 과목 → year:1, semester:2"
       + "\n[2022개정 과목 강제 배정] 공통국어1·공통수학1·공통영어1·한국사1·통합사회1·통합과학1 → year:1,semester:1 / 공통국어2·공통수학2·공통영어2·한국사2·통합사회2·통합과학2 → year:1,semester:2 / 공통국어1~2가 없고 학기2에만 국어과목이 있어도 year:1 유지"
@@ -5022,7 +5028,7 @@ const RAILWAY_URL = "https://modenedu-production.up.railway.app";
     try {
       const res = await fetch("/api/claude", {
         method:"POST", headers:{"Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01"},
-        body: JSON.stringify({ model:"claude-sonnet-4-5-20250929", max_tokens:6000, system:sys,
+        body: JSON.stringify({ model:"claude-sonnet-4-5-20250929", max_tokens:16000, system:sys,
           messages:[{role:"user",content:[
             {type:"document",source:{type:"base64",media_type:"application/pdf",data:pdfBase64}},
             // ② 유저 메시지: 추출(전공 무관)과 판정(전공 사용)을 명시적으로 분리
