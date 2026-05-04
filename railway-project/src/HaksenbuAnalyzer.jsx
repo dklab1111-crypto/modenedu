@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+\import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import * as d3 from "d3";
 
 
@@ -4874,6 +4874,79 @@ const RAILWAY_URL = "https://modenedu-production.up.railway.app";
 
     const readPdf = (file) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result.split(",")[1]); r.onerror = rej; r.readAsDataURL(file); });
 
+  // ═══════════════════════════════════════════════════════════════
+  // v27: 진짜 Vision OCR — PDF.js로 페이지를 PNG 이미지로 변환
+  // ═══════════════════════════════════════════════════════════════
+  const ensurePdfJs = async () => {
+    if (window.pdfjsLib) return window.pdfjsLib;
+    return new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+      script.onload = () => {
+        if (window.pdfjsLib) {
+          window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+          resolve(window.pdfjsLib);
+        } else { reject(new Error('PDF.js 로드 실패')); }
+      };
+      script.onerror = () => reject(new Error('PDF.js CDN 로드 실패'));
+      document.head.appendChild(script);
+    });
+  };
+
+  const extractGradePagesAsImages = async (file) => {
+    const pdfjs = await ensurePdfJs();
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
+    const totalPages = pdf.numPages;
+    let gradeSectionStart = -1, gradeSectionEnd = -1;
+    for (let i = 1; i <= totalPages; i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      const text = content.items.map(it => it.str).join(' ');
+      if (gradeSectionStart === -1 && (text.includes('교과학습발달상황') || text.includes('교 과 학 습 발 달 상 황'))) {
+        gradeSectionStart = i;
+      }
+      if (gradeSectionStart !== -1 && i > gradeSectionStart) {
+        if (text.includes('독서활동상황') || text.includes('독 서 활 동 상 황') ||
+            text.includes('행동특성') || text.includes('행 동 특 성')) {
+          gradeSectionEnd = i - 1; break;
+        }
+      }
+    }
+    if (gradeSectionStart === -1) {
+      gradeSectionStart = Math.min(8, totalPages);
+      gradeSectionEnd = Math.min(14, totalPages);
+    } else if (gradeSectionEnd === -1) {
+      gradeSectionEnd = Math.min(gradeSectionStart + 6, totalPages);
+    }
+    console.log(`[v27 Vision OCR] 성적표 페이지: ${gradeSectionStart}~${gradeSectionEnd}/${totalPages}`);
+    const images = [];
+    const MAX_PAGES = 8;
+    const pagesToRender = Math.min(gradeSectionEnd - gradeSectionStart + 1, MAX_PAGES);
+    for (let offset = 0; offset < pagesToRender; offset++) {
+      const pageNum = gradeSectionStart + offset;
+      try {
+        const page = await pdf.getPage(pageNum);
+        const viewport = page.getViewport({ scale: 1.5 });
+        const canvas = document.createElement('canvas');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        const context = canvas.getContext('2d');
+        context.fillStyle = '#FFFFFF';
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        await page.render({ canvasContext: context, viewport }).promise;
+        const dataUrl = canvas.toDataURL('image/png');
+        const base64 = dataUrl.split(',')[1];
+        images.push({ page: pageNum, base64, sizeKB: Math.round(base64.length * 0.75 / 1024) });
+      } catch (e) {
+        console.warn(`[v27 Vision OCR] 페이지 ${pageNum} 렌더링 실패:`, e);
+      }
+    }
+    const totalImageKB = images.reduce((s, im) => s + im.sizeKB, 0);
+    console.log(`[v27 Vision OCR] ${images.length}장 이미지 생성 (총 ${totalImageKB}KB)`);
+    return { images, gradeSectionStart, gradeSectionEnd, totalPages };
+  };
+
   const handleFile = useCallback(async (file) => {
     if (!file) return;
     if (file.type !== "application/pdf") { setError("PDF 파일만 업로드 가능합니다."); return; }
@@ -5044,36 +5117,151 @@ const RAILWAY_URL = "https://modenedu-production.up.railway.app";
         ).join("\n")
       : "";
     const sys = systemPrompt + pastContext; // useMemo 캐시 + 누적 데이터
+
+    // ═══════════════════════════════════════════════════════════════
+    // v27: 진짜 Vision OCR — 성적표 페이지를 이미지로 변환하여 PDF와 함께 첨부
+    // ═══════════════════════════════════════════════════════════════
+    let gradeImages = [];
+    let visionOcrInfo = "";
     try {
+      console.log("[v27] PDF에서 성적표 페이지 이미지 추출 시작...");
+      const extractResult = await extractGradePagesAsImages(pdfFile);
+      gradeImages = extractResult.images;
+      visionOcrInfo = `(성적표 ${extractResult.gradeSectionStart}~${extractResult.gradeSectionEnd}p, ${gradeImages.length}장 이미지 첨부)`;
+      console.log("[v27] Vision OCR 이미지 준비 완료:", visionOcrInfo);
+    } catch (e) {
+      console.warn("[v27] Vision OCR 이미지 변환 실패, PDF document만 사용:", e);
+    }
+
+    // 메시지 content 구성: PDF document + 성적표 페이지 이미지들 + 텍스트 지시
+    const buildMessageContent = (extractMode = "primary") => {
+      const content = [
+        {type:"document",source:{type:"base64",media_type:"application/pdf",data:pdfBase64}}
+      ];
+      // v27 핵심: 성적표 페이지 이미지를 추가 첨부 (Claude가 시각적으로 표 구조 인식)
+      gradeImages.forEach(img => {
+        content.push({
+          type:"image",
+          source:{type:"base64",media_type:"image/png",data:img.base64}
+        });
+      });
+      // 모드별 텍스트 지시
+      const baseText = "[추출 지시] 학생부 원문에서 keywords·탐구주제·활동경험·독서를 전공과 무관하게 그대로 발췌하세요."
+        + " [판정 지시] 추출 완료 후, major_fit·major_related만 목표전공(" + major + ") 기준으로 판정하세요."
+        + " 교육과정: " + currLabel;
+
+      const visionInstruction = gradeImages.length > 0
+        ? "\n\n🔍🔍🔍 [v27 진짜 Vision OCR — 매우 중요] 첨부된 PNG 이미지 " + gradeImages.length + "장은 PDF의 '7. 교과학습발달상황' 섹션 페이지들이다. 표의 시각적 구조를 직접 보고 분석하라:"
+          + "\n  ① 이미지에서 표 헤더 행을 찾아라 (학기|교과|과목|학점수(또는단위수)|원점수/평균|성취도|석차등급|비고 순서)"
+          + "\n  ② '석차등급' 헤더가 있는 컬럼의 x좌표를 시각적으로 확정하라 — 보통 표의 오른쪽 끝(또는 비고 직전)"
+          + "\n  ③ 각 과목 행에서 '석차등급' 컬럼의 같은 x좌표에 정렬된 숫자만 grade 값으로 추출하라"
+          + "\n  ④ '학점수/단위수' 컬럼(보통 4번째)의 숫자는 절대 grade로 쓰지 말고 units으로만 사용"
+          + "\n  ⑤ 자가검증: 추출한 grade가 같은 행의 원점수와 일관되는가? (원점수 95+ → grade 1~2, 원점수 70 미만 → grade 5+)"
+          + "\n  ⑥ PDF document와 이미지가 동일한 학생부이므로, 둘이 충돌하면 이미지의 시각적 정렬을 우선하라"
+        : "\n\n🔍 [성적 추출] PDF의 '7. 교과학습발달상황' 표를 시각적으로 분석하여 '석차등급' 컬럼 위치를 먼저 찾고, 같은 컬럼의 숫자만 grade로 추출하세요. '학점수/단위수' 컬럼 값은 grade가 아닙니다.";
+
+      // 재추출 모드: 1차에서 잘못 읽은 부분을 구체적으로 지적
+      const retryInstruction = extractMode === "retry"
+        ? "\n\n🚨🚨🚨 [v27 재추출 — 1차 추출 실패 감지] 직전 추출에서 컬럼 오독이 검출되었다. 구체적으로:"
+          + "\n  • 한 학기에서 여러 과목의 grade와 units이 동일한 값으로 추출됨 → 100% 단위수를 등급으로 잘못 읽은 것"
+          + "\n  • 예: 단위수=4, 등급=1인데 grade:4로 추출됨 → 올바른 값은 grade:1"
+          + "\n  • [재추출 절대 규칙] 이번에는 첨부된 PNG 이미지를 한 행씩 천천히 따라가며 시각적으로 분석하라"
+          + "\n  • 표의 '석차등급' 헤더 위치를 정확히 찾고, 그 컬럼의 숫자만 grade로 사용하라"
+          + "\n  • '학점수' 컬럼(보통 1~5의 작은 정수)과 '석차등급' 컬럼(1~9의 작은 정수)을 헤더 위치로 명확히 구분하라"
+          + "\n  • 원점수가 90+ 인데 grade가 4 이상이면 즉시 의심하고 재확인하라"
+        : "";
+
+      content.push({type:"text", text: baseText + visionInstruction + retryInstruction});
+      return content;
+    };
+
+    // ═══════════════════════════════════════════════════════════════
+    // v27: API 호출 함수 (재추출 가능하게 분리)
+    // ═══════════════════════════════════════════════════════════════
+    const callClaudeAPI = async (extractMode) => {
       const res = await fetch("/api/claude", {
         method:"POST", headers:{"Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01"},
-        body: JSON.stringify({ model:"claude-sonnet-4-5-20250929", max_tokens:16000, system:sys,
-          messages:[{role:"user",content:[
-            {type:"document",source:{type:"base64",media_type:"application/pdf",data:pdfBase64}},
-            // ② 유저 메시지: 추출(전공 무관)과 판정(전공 사용)을 명시적으로 분리
-            {type:"text",text:"[추출 지시] 학생부 원문에서 keywords·탐구주제·활동경험·독서를 전공과 무관하게 그대로 발췌하세요."
-              + " [판정 지시] 추출 완료 후, major_fit·major_related만 목표전공(" + major + ") 기준으로 판정하세요."
-              + " 교육과정: " + currLabel
-              + "\n\n🔍 [성적 추출 핵심 지시] PDF의 '7. 교과학습발달상황' 섹션에 있는 표를 시각적으로 보세요. 표의 헤더에서 '석차등급' 컬럼 위치를 먼저 찾고, 각 과목 행의 같은 위치(같은 x좌표)에 있는 숫자만 grade 값으로 추출하세요. '학점수'/'단위수' 컬럼의 숫자를 grade로 절대 사용하지 마세요. 표를 텍스트 한 줄로 풀어서 읽지 말고, 시각적 컬럼 정렬을 우선하세요."},
-          ]}] }),
+        body: JSON.stringify({
+          model:"claude-sonnet-4-5-20250929",
+          max_tokens:16000,
+          system:sys,
+          messages:[{role:"user", content: buildMessageContent(extractMode)}]
+        }),
       });
       const result = await res.json();
       if (result.error) throw new Error(result.error.message);
-      const rawTxt = (result.content?.[0]?.text||"")
+      return result;
+    };
+
+    // sanity check 함수: 추출 결과에서 컬럼 오독 패턴 검출
+    const detectColumnConfusion = (sgList) => {
+      if (!sgList || sgList.length === 0) return false;
+      const bySemester = {};
+      sgList.forEach(s => {
+        if (s.year != null && s.semester != null) {
+          const key = `${s.year}-${s.semester}`;
+          (bySemester[key] = bySemester[key] || []).push(s);
+        }
+      });
+      let suspectCount = 0;
+      Object.entries(bySemester).forEach(([sem, list]) => {
+        const sameCount = list.filter(s =>
+          s.grade != null && s.units != null &&
+          Number(s.grade) === Number(s.units)
+        ).length;
+        if (sameCount >= 3) suspectCount++;
+      });
+      // 2개 이상의 학기에서 의심 패턴 → 컬럼 오독 확정
+      return suspectCount >= 2;
+    };
+
+    try {
+      // 1차 호출
+      console.log("[v27] 1차 분석 시작 " + visionOcrInfo);
+      let result = await callClaudeAPI("primary");
+      let rawTxt = (result.content?.[0]?.text||"")
         .replace(/```json/gi,"").replace(/```/g,"").trim();
-      // JSON 블록만 추출 ({ 부터 마지막 } 까지)
-      const jsonStart = rawTxt.indexOf("{");
-      const jsonEnd = rawTxt.lastIndexOf("}");
+      let jsonStart = rawTxt.indexOf("{");
+      let jsonEnd = rawTxt.lastIndexOf("}");
       if (jsonStart === -1 || jsonEnd === -1) throw new Error("JSON 블록을 찾을 수 없습니다");
       let cleanJson = rawTxt.slice(jsonStart, jsonEnd+1);
+      try { JSON.parse(cleanJson); } catch(e) { cleanJson = repairJson(cleanJson); }
+      let parsed = JSON.parse(cleanJson);
 
-      try {
-        JSON.parse(cleanJson);
-      } catch(parseErr) {
-        cleanJson = repairJson(cleanJson);
+      // ═══════════════════════════════════════════════════════════════
+      // v27: 1차 추출 후 즉시 sanity check → 컬럼 오독 검출 시 자동 재추출
+      // ═══════════════════════════════════════════════════════════════
+      if (gradeImages.length > 0 && parsed.grades?.subject_grades) {
+        const isConfused = detectColumnConfusion(parsed.grades.subject_grades);
+        if (isConfused) {
+          console.warn("[v27] 1차 추출에서 컬럼 오독 감지 → 자동 재추출 시작");
+          try {
+            const retryResult = await callClaudeAPI("retry");
+            const retryTxt = (retryResult.content?.[0]?.text||"")
+              .replace(/```json/gi,"").replace(/```/g,"").trim();
+            const rJsonStart = retryTxt.indexOf("{");
+            const rJsonEnd = retryTxt.lastIndexOf("}");
+            if (rJsonStart !== -1 && rJsonEnd !== -1) {
+              let rCleanJson = retryTxt.slice(rJsonStart, rJsonEnd+1);
+              try { JSON.parse(rCleanJson); } catch(e) { rCleanJson = repairJson(rCleanJson); }
+              const retryParsed = JSON.parse(rCleanJson);
+              // 재추출 결과가 컬럼 오독이 없으면 → 채택
+              if (retryParsed.grades?.subject_grades &&
+                  !detectColumnConfusion(retryParsed.grades.subject_grades)) {
+                console.log("[v27] 재추출 성공 — 컬럼 오독 해소");
+                parsed = retryParsed;
+              } else {
+                console.warn("[v27] 재추출에도 컬럼 오독 지속 — 1차 결과 유지 (sanity 배너 표시)");
+              }
+            }
+          } catch(retryErr) {
+            console.warn("[v27] 재추출 실패:", retryErr);
+          }
+        }
       }
 
-      const parsed = JSON.parse(cleanJson);
+      // ↓ 이하 기존 v26 후처리 로직 (parsed.grades.subject_grades 정제)
+      // (v27 패치: 위에서 parsed 객체가 이미 준비됨 — 자동 재추출 로직 포함)
       // g값 클렌징: "1등급" → "1", "high" → "-" 등 방어 처리
       if (parsed.grades?.subject_grades) {
         // 2022개정 과목명 → 학년/학기 강제 보정 테이블
@@ -5510,7 +5698,7 @@ const RAILWAY_URL = "https://modenedu-production.up.railway.app";
             <div style={{display:"inline-flex",alignItems:"center",gap:8,background:"#EFF6FF",border:"1px solid #BFDBFE",borderRadius:20,padding:"6px 18px",marginBottom:16}}>
               <span style={{color:"#1D4ED8",fontSize:12,fontWeight:700}}>모든에듀 AI 학생부 분석 시스템</span>
             </div>
-            <h1 style={{margin:"0 0 12px",fontSize:34,fontWeight:900,color:"#111827",lineHeight:1.2,letterSpacing:"-0.03em"}}>키워드 네트워크 분석기 <span style={{fontSize:13,fontWeight:700,color:"#fff",background:"#1D4ED8",borderRadius:6,padding:"2px 8px",verticalAlign:"middle",letterSpacing:0}}>v26</span></h1>
+            <h1 style={{margin:"0 0 12px",fontSize:34,fontWeight:900,color:"#111827",lineHeight:1.2,letterSpacing:"-0.03em"}}>키워드 네트워크 분석기 <span style={{fontSize:13,fontWeight:700,color:"#fff",background:"#1D4ED8",borderRadius:6,padding:"2px 8px",verticalAlign:"middle",letterSpacing:0}}>v27</span></h1>
             <p style={{color:"#6B7280",fontSize:14,lineHeight:1.85,margin:0}}>학생부 PDF를 업로드하면 AI가 핵심 키워드를 추출하고<br/>목표 전공 기반 네트워크로 시각화합니다</p>
           </div>
           <div style={{background:"#fff",border:"1.5px solid #E5EDF5",borderRadius:20,padding:"34px 30px",boxShadow:"0 6px 30px rgba(0,0,0,0.08)"}}>
@@ -5866,8 +6054,9 @@ const RAILWAY_URL = "https://modenedu-production.up.railway.app";
                 ))}
                 <div style={{marginTop:9,paddingTop:9,borderTop:"1px dashed #FCA5A5",color:"#991B1B",fontSize:11,lineHeight:1.6}}>
                   💡 권장 조치: ① 원본 PDF의 성적표·과목명을 직접 대조 확인 ② 🚀 분석 시작 버튼으로 재분석 ③ 반복 발생 시 PDF 품질(스캔본 여부) 점검
-                  <br/>🛡️ <b>v26 안전조치</b>: 의심 등급은 빨간 배너로 알리지만 표시는 그대로 유지. 사용자가 직접 PDF와 대조 검토 권장.
-                  <br/>👁️ <b>v26 Vision OCR</b>: AI가 PDF 표를 시각적으로 분석하여 컬럼 위치 기반으로 등급을 추출합니다.
+                  <br/>🛡️ <b>v27 안전조치</b>: 의심 등급은 빨간 배너로 알리지만 표시는 그대로 유지. 사용자가 직접 PDF와 대조 검토 권장.
+                  <br/>👁️ <b>v27 진짜 Vision OCR</b>: PDF.js로 성적표 페이지를 PNG 이미지로 변환 후 Claude Vision으로 표 컬럼 정렬 직접 분석.
+                  <br/>🔄 <b>v27 자동 재추출</b>: 1차 추출에서 컬럼 오독(등급=단위수 패턴) 검출 시 강화 프롬프트로 자동 2차 호출.
                 </div>
               </div>
             )}
