@@ -4944,13 +4944,30 @@ const RAILWAY_URL = "https://modenedu-production.up.railway.app";
       + "\n• 자가 검증: 각 title·description을 학생부 PDF에서 찾을 수 없다면 삭제할 것."
       + "\n[탐구주제] 세특·창체에서 ① 실험명·이론명·탐구제목이 명시된 심화 탐구만 추출. ② 단순 수업참여·발표·토론·소감 제외. ③ title=학생부 원문 탐구제목 그대로, description=원문 핵심 1문장(50자 이내). 상위 10개."
       + "\n[활동경험] ① 역할(부장·조장·회장 등)이 명시되거나 ② 발표·칼럼·보고서·강의 등 결과물이 학생부에 기재된 활동만. title=학생부 원문 활동명 그대로, description=역할·결과 1문장(40자 이내). 단순 봉사출석·환경정화·캠페인 제외. 상위 8개."
+      + "\n⚠️ [과목명 정확성 검증 필수] 추출한 모든 과목명은 한국 고등학교 정규 교육과정 과목인지 확인하라:"
+      + "\n  ▶ 한국 고등학교에 '원본'이라는 과목은 존재하지 않는다. '원본Ⅰ', '원본 I' 등이 보이면 PDF 글꼴 인식 오류로 '일본어Ⅰ' 또는 '한문Ⅰ'을 잘못 읽은 것일 가능성이 매우 높다."
+      + "\n  ▶ 마찬가지로 '독시'(독서 오독), '함학'(화학 오독) 등 비표준 과목명이 의심되면 가장 유사한 표준 과목명으로 추정하되, title에는 원문 그대로 두고 description 끝에 ' (※추정: 일본어Ⅰ로 보임)' 형식으로 추정 결과를 명시하라."
+      + "\n  ▶ 한국 고등학교 표준 외국어 과목: 일본어Ⅰ·Ⅱ, 중국어Ⅰ·Ⅱ, 한문Ⅰ·Ⅱ, 스페인어Ⅰ·Ⅱ, 독일어Ⅰ·Ⅱ, 프랑스어Ⅰ·Ⅱ, 러시아어Ⅰ·Ⅱ, 아랍어Ⅰ·Ⅱ, 베트남어Ⅰ·Ⅱ"
+      + "\n  ▶ subject_grades에서도 동일하게 적용 — 비표준 과목명은 subject 필드에 원문을 두되 trend 다음에 _ai_note:'일본어Ⅰ로 추정' 같은 메타 필드로 표시."
       + "\n[독서] 세특 원문에 책 제목이 직접 등장하고 탐구·분석으로 이어진 책만. title=원문 책 제목 그대로. 상위 8개."
       // ══ ④ major_fit은 판정만 — 추출에 영향 없음 ══
       + "\n\n[major_fit 판정 전용] 목표전공(" + major + ") 기준: 직접 연관=높음, 일반적 연관=중간, 무관=낮음."
       + "\n※ major_fit 판정은 추출된 원문 표현을 바꾸지 않고 점수만 매기는 것. 추출 단계와 완전 분리."
       + "\ngrades 키: summary(문자열), subject_grades(배열)"
       + "\nsubject_grades 각 항목: {subject:과목명, year:학년(1/2/3), semester:학기(1/2), grade:석차등급(1~9 정수 / 5등급제 과목은 1~5), units:단위수(정수), trend:up/down/stable}"
-      + "\n⚠️ [컬럼 혼동 금지] 학생부 성적표에는 두 종류의 표가 있다. ①일반과목 표(석차등급 있음): 학기|교과|과목|학점수|원점수|성취도(수강자수)|석차등급|비고 — 이 표만 grade 추출 대상. 예: 학점수=4, 석차등급=3이면 grade:3, units:4. ②진로선택과목 표(석차등급 없음): 학기|교과|과목|학점수|원점수|성취도|성취도별분포비율|비고 — 이 표는 석차등급 컬럼 자체가 없으므로 grade 추출 대상 아님. '성취도별분포비율'을 석차등급으로 절대 혼동하지 말 것."
+      + "\n⚠️⚠️⚠️ [컬럼 혼동 절대 금지 — 가장 중요] 학생부 성적표 컬럼 순서를 정확히 인식하라:"
+      + "\n  ▶ 2015개정 일반과목: 학기|교과|과목|단위수|원점수/과목평균(표준편차)|성취도(수강자수)|석차등급"
+      + "\n  ▶ 2022개정 일반과목: 학기|교과|과목|학점수|원점수|성취도(수강자수)|석차등급|비고"
+      + "\n  ▶ 2022개정 진로선택과목: 학기|교과|과목|학점수|원점수|성취도|성취도별분포비율|비고 (석차등급 컬럼 자체가 없음 — grade 추출 대상 아님)"
+      + "\n  ※ 단위수(=학점수)는 보통 1~5의 작은 정수, 석차등급도 1~9 정수 → 두 값이 매우 헷갈린다."
+      + "\n  ※ grade는 반드시 표의 '석차등급' 컬럼(보통 맨 오른쪽 또는 비고 바로 앞) 값만 사용할 것."
+      + "\n  ※ '단위수'·'학점수' 컬럼 값을 grade로 절대 입력하지 말 것."
+      + "\n  ※ '성취도별분포비율'(예: A(30)B(40)C(30)) 컬럼을 석차등급으로 절대 혼동하지 말 것."
+      + "\n  예: 단위수=4, 석차등급=3 → grade:3, units:4 (절대 grade:4가 아님)"
+      + "\n[컬럼 혼동 자가검증 필수] 추출 후 다음 sanity check를 반드시 통과해야 한다:"
+      + "\n  ① 한 과목 행에서 grade와 units이 같은 값이면(예: grade:4, units:4) → 컬럼 오독 의심 → 재확인"
+      + "\n  ② 한 학생의 모든 과목 평균이 정확히 정수(4.00, 3.00 등)에 가깝게 균일하면 → 단위수를 등급으로 잘못 읽은 것 → 처음부터 재추출"
+      + "\n  ③ 국어·수학·영어가 모두 동일한 grade를 갖고 그 값이 단위수(보통 4)와 같다면 → 99% 컬럼 오독"
       + "\n⚠️ [1학기·2학기 병합 금지] 국어·수학·영어 등 양 학기 모두 수강하는 과목은 반드시 1학기(semester:1)와 2학기(semester:2) 두 개 항목으로 분리 추출. 동일 과목을 단위수 합산(예: units:8)한 단일 항목으로 합치는 것은 오류다. 예: 국어 1학기 4단위+2학기 4단위 → {subject:'국어',year:1,semester:1,units:4,...}, {subject:'국어',year:1,semester:2,units:4,...} 두 항목이 맞음."
       + "\n⚠️⚠️ [성적 추출 최우선] 성적표 데이터가 가장 중요합니다. 반드시 모든 과목의 석차등급을 추출하세요. 빈 등급란도 해당 과목 행이 실제로 있으면 포함하세요."
       + "\n⚠️ [페이지 분리 주의] 성적표 테이블은 PDF 페이지 경계에서 잘릴 수 있다. 다음 페이지에서 표 헤더 없이 과목 행이 이어지면 이전 페이지와 동일한 학년·학기 테이블이 계속되는 것이므로 반드시 포함. 어떤 과목도 누락하지 말 것."
@@ -5099,6 +5116,77 @@ const RAILWAY_URL = "https://modenedu-production.up.railway.app";
           return cleaned;
         });
       }
+      // ═══════════════════════════════════════════════════════════════
+      // v26: AI 파싱 오류 sanity check (컬럼 혼동 + 비표준 과목명 검증)
+      // ═══════════════════════════════════════════════════════════════
+      const sanityWarnings = [];
+      if (parsed.grades?.subject_grades && parsed.grades.subject_grades.length > 0) {
+        const sgList = parsed.grades.subject_grades;
+        // [Check 1] 학기별 grouping
+        const bySemester = {};
+        sgList.forEach(s => {
+          if (s.year != null && s.semester != null) {
+            const key = `${s.year}-${s.semester}`;
+            (bySemester[key] = bySemester[key] || []).push(s);
+          }
+        });
+        // [Check 2] 동일 학기에서 grade === units인 과목이 3개 이상이면 컬럼 오독 의심
+        Object.entries(bySemester).forEach(([sem, list]) => {
+          const sameCount = list.filter(s =>
+            s.grade != null && s.units != null &&
+            s.grade !== "-" && s.units !== "-" &&
+            Number(s.grade) === Number(s.units)
+          ).length;
+          if (sameCount >= 3) {
+            sanityWarnings.push(`⚠️ ${sem.replace("-","학년 ")}학기: ${sameCount}개 과목에서 등급=단위수 동일값 — 단위수를 등급으로 잘못 읽은 컬럼 오독 의심`);
+          }
+        });
+        // [Check 3] 동일 학기에서 모든 grade가 같은 값이면 컬럼 오독 의심
+        Object.entries(bySemester).forEach(([sem, list]) => {
+          const grades = list.map(s => s.grade).filter(g => g != null && g !== "-");
+          if (grades.length >= 3) {
+            const uniqueGrades = [...new Set(grades.map(String))];
+            if (uniqueGrades.length === 1) {
+              sanityWarnings.push(`⚠️ ${sem.replace("-","학년 ")}학기: 모든 과목 등급이 ${grades[0]}로 균일 — 컬럼 오독 또는 단위수 오기재 의심`);
+            }
+          }
+        });
+        // [Check 4] 비표준 과목명 탐지 (한국 고교 교육과정에 없는 과목)
+        const SUSPICIOUS_SUBJECTS = ["원본","원본Ⅰ","원본Ⅱ","원본 I","원본 II","원본1","원본2"];
+        const SUBJECT_HINT_MAP = {
+          "원본": "일본어 또는 한문(글꼴 인식 오류 가능성)",
+          "원본Ⅰ": "일본어Ⅰ 또는 한문Ⅰ로 추정",
+          "원본Ⅱ": "일본어Ⅱ 또는 한문Ⅱ로 추정",
+          "원본 I": "일본어Ⅰ 또는 한문Ⅰ로 추정",
+          "원본 II": "일본어Ⅱ 또는 한문Ⅱ로 추정",
+          "원본1": "일본어Ⅰ 또는 한문Ⅰ로 추정",
+          "원본2": "일본어Ⅱ 또는 한문Ⅱ로 추정",
+        };
+        const foundSuspicious = new Set();
+        sgList.forEach(s => {
+          if (s.subject && SUSPICIOUS_SUBJECTS.some(sus => s.subject.includes(sus))) {
+            foundSuspicious.add(s.subject);
+          }
+        });
+        // 활동경험·탐구주제·독서에서도 검사
+        ["탐구주제","활동경험","독서"].forEach(key => {
+          (parsed.summary?.[key]||[]).forEach(item => {
+            const txt = (item.title||"") + " " + (item.subject||"") + " " + (item.description||"");
+            SUSPICIOUS_SUBJECTS.forEach(sus => {
+              if (txt.includes(sus)) foundSuspicious.add(sus);
+            });
+          });
+        });
+        if (foundSuspicious.size > 0) {
+          const items = [...foundSuspicious].map(s => `'${s}' → ${SUBJECT_HINT_MAP[s]||"비표준 과목명"}`);
+          sanityWarnings.push(`⚠️ 비표준 과목명 발견: ${items.join(", ")} — PDF 글꼴 인식 오류 가능성 높음`);
+        }
+      }
+      if (sanityWarnings.length > 0) {
+        parsed._sanityWarnings = sanityWarnings;
+        console.warn("[v26 Sanity Check]", sanityWarnings);
+      }
+      // ═══════════════════════════════════════════════════════════════
       setData(parsed); setPage("result");
       // v25: 자동 저장 → 저장 다이얼로그 띄우기로 변경
       setPendingSaveData({ parsed, name: studentName, major, curriculum });
@@ -5323,7 +5411,7 @@ const RAILWAY_URL = "https://modenedu-production.up.railway.app";
             <div style={{display:"inline-flex",alignItems:"center",gap:8,background:"#EFF6FF",border:"1px solid #BFDBFE",borderRadius:20,padding:"6px 18px",marginBottom:16}}>
               <span style={{color:"#1D4ED8",fontSize:12,fontWeight:700}}>모든에듀 AI 학생부 분석 시스템</span>
             </div>
-            <h1 style={{margin:"0 0 12px",fontSize:34,fontWeight:900,color:"#111827",lineHeight:1.2,letterSpacing:"-0.03em"}}>키워드 네트워크 분석기 <span style={{fontSize:13,fontWeight:700,color:"#fff",background:"#1D4ED8",borderRadius:6,padding:"2px 8px",verticalAlign:"middle",letterSpacing:0}}>v25</span></h1>
+            <h1 style={{margin:"0 0 12px",fontSize:34,fontWeight:900,color:"#111827",lineHeight:1.2,letterSpacing:"-0.03em"}}>키워드 네트워크 분석기 <span style={{fontSize:13,fontWeight:700,color:"#fff",background:"#1D4ED8",borderRadius:6,padding:"2px 8px",verticalAlign:"middle",letterSpacing:0}}>v26</span></h1>
             <p style={{color:"#6B7280",fontSize:14,lineHeight:1.85,margin:0}}>학생부 PDF를 업로드하면 AI가 핵심 키워드를 추출하고<br/>목표 전공 기반 네트워크로 시각화합니다</p>
           </div>
           <div style={{background:"#fff",border:"1.5px solid #E5EDF5",borderRadius:20,padding:"34px 30px",boxShadow:"0 6px 30px rgba(0,0,0,0.08)"}}>
@@ -5667,6 +5755,21 @@ const RAILWAY_URL = "https://modenedu-production.up.railway.app";
                 </div>
               ))}
             </div>
+            {data?._sanityWarnings && data._sanityWarnings.length > 0 && (
+              <div style={{background:"#FEF2F2",border:"2px solid #DC2626",borderRadius:11,padding:"13px 17px",marginBottom:16}}>
+                <div style={{color:"#991B1B",fontSize:13,fontWeight:800,marginBottom:7,display:"flex",alignItems:"center",gap:6}}>
+                  🚨 AI 파싱 오류 의심 — 결과 검증 필요
+                </div>
+                {data._sanityWarnings.map((w,i)=>(
+                  <div key={i} style={{color:"#7F1D1D",fontSize:12,lineHeight:1.7,marginBottom:i<data._sanityWarnings.length-1?5:0}}>
+                    {w}
+                  </div>
+                ))}
+                <div style={{marginTop:9,paddingTop:9,borderTop:"1px dashed #FCA5A5",color:"#991B1B",fontSize:11,lineHeight:1.6}}>
+                  💡 권장 조치: ① 원본 PDF의 성적표·과목명을 직접 대조 확인 ② 🚀 분석 시작 버튼으로 재분석 ③ 반복 발생 시 PDF 품질(스캔본 여부) 점검
+                </div>
+              </div>
+            )}
             {data?.grades?.summary && (
               <div style={{background:"#EFF6FF",border:"1.5px solid #BFDBFE",borderRadius:11,padding:"13px 17px",marginBottom:16}}>
                 <div style={{color:"#1D4ED8",fontSize:12,fontWeight:800,marginBottom:5}}>📋 내신 종합 분석 ({currBadge.label} · 단위수 가중평균)</div>
