@@ -4764,8 +4764,15 @@ const RAILWAY_URL = "https://modenedu-production.up.railway.app";
       const topics = (parsedData.summary?.탐구주제 || []).map(t => t.title);
       const activities = (parsedData.summary?.활동경험 || []).map(a => a.title);
       const books = (parsedData.summary?.독서 || []).map(b => b.title);
-      const avgs = (parsedData.grades?.subject_grades||[]).map(s=>parseFloat(s.avg)).filter(v=>!isNaN(v));
-      const gradesAvg = avgs.length ? (avgs.reduce((a,b)=>a+b,0)/avgs.length).toFixed(2) : null;
+      // v26-patch: s.avg(존재X) → s.grade(스키마 일치) + 단위수 가중평균(엑셀 계산법과 동일)
+      const sgRows = (parsedData.grades?.subject_grades||[]).filter(s => {
+        const g = parseFloat(s.grade); const u = parseFloat(s.units);
+        return !isNaN(g) && g >= 1 && g <= 9 && !isNaN(u) && u > 0;
+      });
+      const totalUnits = sgRows.reduce((a,s)=>a + parseFloat(s.units), 0);
+      const weightedSum = sgRows.reduce((a,s)=>a + parseFloat(s.grade)*parseFloat(s.units), 0);
+      const gradesAvg = totalUnits > 0 ? (weightedSum/totalUnits).toFixed(2) : null;
+      console.log("[v26-patch] 내신 가중평균 계산:", { 유효과목수: sgRows.length, 총단위수: totalUnits, 가중평균: gradesAvg });
       const res = await fetch(RAILWAY_URL + "/api/students", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
