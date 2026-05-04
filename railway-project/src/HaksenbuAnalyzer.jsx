@@ -1,4 +1,4 @@
-\import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import * as d3 from "d3";
 
 
@@ -4875,76 +4875,106 @@ const RAILWAY_URL = "https://modenedu-production.up.railway.app";
     const readPdf = (file) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result.split(",")[1]); r.onerror = rej; r.readAsDataURL(file); });
 
   // ═══════════════════════════════════════════════════════════════
-  // v27: 진짜 Vision OCR — PDF.js로 페이지를 PNG 이미지로 변환
+  // v27: PDF 성적표 페이지를 PNG 이미지로 변환 (Vision OCR용)
+  // - 빌드 안전: 모든 브라우저 API를 try/catch로 감싸고 typeof 체크
+  // - 실패 시 자동으로 PDF document만 사용 (v26 동작으로 fallback)
   // ═══════════════════════════════════════════════════════════════
-  const ensurePdfJs = async () => {
-    if (window.pdfjsLib) return window.pdfjsLib;
+  const loadPdfJsLib = () => {
     return new Promise((resolve, reject) => {
-      const script = document.createElement('script');
-      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
-      script.onload = () => {
-        if (window.pdfjsLib) {
-          window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-          resolve(window.pdfjsLib);
-        } else { reject(new Error('PDF.js 로드 실패')); }
-      };
-      script.onerror = () => reject(new Error('PDF.js CDN 로드 실패'));
-      document.head.appendChild(script);
+      try {
+        if (typeof window === "undefined") return reject(new Error("브라우저 환경 아님"));
+        if (window.pdfjsLib) return resolve(window.pdfjsLib);
+        const existing = document.querySelector('script[data-pdfjs="v27"]');
+        if (existing) {
+          // 이미 로드 중인 경우 대기
+          let waited = 0;
+          const timer = setInterval(() => {
+            if (window.pdfjsLib) { clearInterval(timer); resolve(window.pdfjsLib); }
+            else if ((waited += 100) > 10000) { clearInterval(timer); reject(new Error("PDF.js 로드 타임아웃")); }
+          }, 100);
+          return;
+        }
+        const s = document.createElement("script");
+        s.setAttribute("data-pdfjs", "v27");
+        s.src = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
+        s.onload = () => {
+          try {
+            if (window.pdfjsLib && window.pdfjsLib.GlobalWorkerOptions) {
+              window.pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+              resolve(window.pdfjsLib);
+            } else {
+              reject(new Error("PDF.js 로드 후 라이브러리 객체 없음"));
+            }
+          } catch (e) { reject(e); }
+        };
+        s.onerror = () => reject(new Error("PDF.js CDN 로드 실패"));
+        document.head.appendChild(s);
+      } catch (e) { reject(e); }
     });
   };
 
   const extractGradePagesAsImages = async (file) => {
-    const pdfjs = await ensurePdfJs();
-    const arrayBuffer = await file.arrayBuffer();
-    const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
-    const totalPages = pdf.numPages;
-    let gradeSectionStart = -1, gradeSectionEnd = -1;
-    for (let i = 1; i <= totalPages; i++) {
-      const page = await pdf.getPage(i);
-      const content = await page.getTextContent();
-      const text = content.items.map(it => it.str).join(' ');
-      if (gradeSectionStart === -1 && (text.includes('교과학습발달상황') || text.includes('교 과 학 습 발 달 상 황'))) {
-        gradeSectionStart = i;
-      }
-      if (gradeSectionStart !== -1 && i > gradeSectionStart) {
-        if (text.includes('독서활동상황') || text.includes('독 서 활 동 상 황') ||
-            text.includes('행동특성') || text.includes('행 동 특 성')) {
-          gradeSectionEnd = i - 1; break;
+    // 모든 단계를 try/catch로 감싸고, 실패하면 빈 결과 반환 → 기본 동작 유지
+    try {
+      const pdfjs = await loadPdfJsLib();
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
+      const totalPages = pdf.numPages;
+      let startPage = -1, endPage = -1;
+      for (let i = 1; i <= totalPages; i++) {
+        try {
+          const page = await pdf.getPage(i);
+          const content = await page.getTextContent();
+          const text = content.items.map((it) => it.str).join(" ");
+          if (startPage === -1 && (text.indexOf("교과학습발달상황") !== -1 || text.indexOf("교 과 학 습 발 달 상 황") !== -1)) {
+            startPage = i;
+          }
+          if (startPage !== -1 && i > startPage) {
+            if (text.indexOf("독서활동상황") !== -1 || text.indexOf("독 서 활 동 상 황") !== -1 ||
+                text.indexOf("행동특성") !== -1 || text.indexOf("행 동 특 성") !== -1) {
+              endPage = i - 1; break;
+            }
+          }
+        } catch (pageErr) {
+          console.warn("[v27] 페이지 " + i + " 텍스트 추출 실패:", pageErr);
         }
       }
-    }
-    if (gradeSectionStart === -1) {
-      gradeSectionStart = Math.min(8, totalPages);
-      gradeSectionEnd = Math.min(14, totalPages);
-    } else if (gradeSectionEnd === -1) {
-      gradeSectionEnd = Math.min(gradeSectionStart + 6, totalPages);
-    }
-    console.log(`[v27 Vision OCR] 성적표 페이지: ${gradeSectionStart}~${gradeSectionEnd}/${totalPages}`);
-    const images = [];
-    const MAX_PAGES = 8;
-    const pagesToRender = Math.min(gradeSectionEnd - gradeSectionStart + 1, MAX_PAGES);
-    for (let offset = 0; offset < pagesToRender; offset++) {
-      const pageNum = gradeSectionStart + offset;
-      try {
-        const page = await pdf.getPage(pageNum);
-        const viewport = page.getViewport({ scale: 1.5 });
-        const canvas = document.createElement('canvas');
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
-        const context = canvas.getContext('2d');
-        context.fillStyle = '#FFFFFF';
-        context.fillRect(0, 0, canvas.width, canvas.height);
-        await page.render({ canvasContext: context, viewport }).promise;
-        const dataUrl = canvas.toDataURL('image/png');
-        const base64 = dataUrl.split(',')[1];
-        images.push({ page: pageNum, base64, sizeKB: Math.round(base64.length * 0.75 / 1024) });
-      } catch (e) {
-        console.warn(`[v27 Vision OCR] 페이지 ${pageNum} 렌더링 실패:`, e);
+      if (startPage === -1) {
+        startPage = Math.min(8, totalPages);
+        endPage = Math.min(14, totalPages);
+      } else if (endPage === -1) {
+        endPage = Math.min(startPage + 6, totalPages);
       }
+      console.log("[v27 Vision OCR] 성적표 페이지 범위: " + startPage + "~" + endPage + "/" + totalPages);
+      const images = [];
+      const MAX_PAGES = 8;
+      const pageCount = Math.min(endPage - startPage + 1, MAX_PAGES);
+      for (let offset = 0; offset < pageCount; offset++) {
+        const pageNum = startPage + offset;
+        try {
+          const page = await pdf.getPage(pageNum);
+          const viewport = page.getViewport({ scale: 1.5 });
+          const canvas = document.createElement("canvas");
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          const ctx = canvas.getContext("2d");
+          ctx.fillStyle = "#FFFFFF";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+          const dataUrl = canvas.toDataURL("image/png");
+          const base64 = dataUrl.split(",")[1];
+          images.push({ page: pageNum, base64: base64, sizeKB: Math.round(base64.length * 0.75 / 1024) });
+        } catch (renderErr) {
+          console.warn("[v27 Vision OCR] 페이지 " + pageNum + " 렌더링 실패:", renderErr);
+        }
+      }
+      const totalKB = images.reduce(function (s, im) { return s + im.sizeKB; }, 0);
+      console.log("[v27 Vision OCR] " + images.length + "장 이미지 생성 완료 (" + totalKB + "KB)");
+      return { images: images, startPage: startPage, endPage: endPage, totalPages: totalPages };
+    } catch (e) {
+      console.warn("[v27 Vision OCR] 전체 실패 (PDF document만 사용):", e);
+      return { images: [], startPage: -1, endPage: -1, totalPages: 0 };
     }
-    const totalImageKB = images.reduce((s, im) => s + im.sizeKB, 0);
-    console.log(`[v27 Vision OCR] ${images.length}장 이미지 생성 (총 ${totalImageKB}KB)`);
-    return { images, gradeSectionStart, gradeSectionEnd, totalPages };
   };
 
   const handleFile = useCallback(async (file) => {
@@ -5119,149 +5149,158 @@ const RAILWAY_URL = "https://modenedu-production.up.railway.app";
     const sys = systemPrompt + pastContext; // useMemo 캐시 + 누적 데이터
 
     // ═══════════════════════════════════════════════════════════════
-    // v27: 진짜 Vision OCR — 성적표 페이지를 이미지로 변환하여 PDF와 함께 첨부
+    // v27: Vision OCR 이미지 준비 (실패해도 PDF document로 fallback)
     // ═══════════════════════════════════════════════════════════════
-    let gradeImages = [];
-    let visionOcrInfo = "";
+    let visionImages = [];
+    let visionInfo = "";
     try {
-      console.log("[v27] PDF에서 성적표 페이지 이미지 추출 시작...");
-      const extractResult = await extractGradePagesAsImages(pdfFile);
-      gradeImages = extractResult.images;
-      visionOcrInfo = `(성적표 ${extractResult.gradeSectionStart}~${extractResult.gradeSectionEnd}p, ${gradeImages.length}장 이미지 첨부)`;
-      console.log("[v27] Vision OCR 이미지 준비 완료:", visionOcrInfo);
-    } catch (e) {
-      console.warn("[v27] Vision OCR 이미지 변환 실패, PDF document만 사용:", e);
+      if (pdfFile) {
+        console.log("[v27] Vision OCR 이미지 추출 시작...");
+        const ext = await extractGradePagesAsImages(pdfFile);
+        visionImages = ext.images || [];
+        if (visionImages.length > 0) {
+          visionInfo = "(성적표 " + ext.startPage + "~" + ext.endPage + "p, " + visionImages.length + "장 첨부)";
+          console.log("[v27] Vision OCR 준비 완료 " + visionInfo);
+        } else {
+          console.log("[v27] Vision OCR 이미지 0장 - PDF document만 사용");
+        }
+      }
+    } catch (visionErr) {
+      console.warn("[v27] Vision OCR 단계 실패 - PDF document만 사용:", visionErr);
+      visionImages = [];
     }
 
-    // 메시지 content 구성: PDF document + 성적표 페이지 이미지들 + 텍스트 지시
-    const buildMessageContent = (extractMode = "primary") => {
-      const content = [
-        {type:"document",source:{type:"base64",media_type:"application/pdf",data:pdfBase64}}
+    // 메시지 content 빌더
+    const buildMsgContent = function (mode) {
+      const arr = [
+        { type: "document", source: { type: "base64", media_type: "application/pdf", data: pdfBase64 } }
       ];
-      // v27 핵심: 성적표 페이지 이미지를 추가 첨부 (Claude가 시각적으로 표 구조 인식)
-      gradeImages.forEach(img => {
-        content.push({
-          type:"image",
-          source:{type:"base64",media_type:"image/png",data:img.base64}
+      // Vision OCR 이미지 첨부 (있을 때만)
+      for (let i = 0; i < visionImages.length; i++) {
+        arr.push({
+          type: "image",
+          source: { type: "base64", media_type: "image/png", data: visionImages[i].base64 }
         });
-      });
-      // 모드별 텍스트 지시
-      const baseText = "[추출 지시] 학생부 원문에서 keywords·탐구주제·활동경험·독서를 전공과 무관하게 그대로 발췌하세요."
+      }
+      let txt = "[추출 지시] 학생부 원문에서 keywords·탐구주제·활동경험·독서를 전공과 무관하게 그대로 발췌하세요."
         + " [판정 지시] 추출 완료 후, major_fit·major_related만 목표전공(" + major + ") 기준으로 판정하세요."
         + " 교육과정: " + currLabel;
-
-      const visionInstruction = gradeImages.length > 0
-        ? "\n\n🔍🔍🔍 [v27 진짜 Vision OCR — 매우 중요] 첨부된 PNG 이미지 " + gradeImages.length + "장은 PDF의 '7. 교과학습발달상황' 섹션 페이지들이다. 표의 시각적 구조를 직접 보고 분석하라:"
-          + "\n  ① 이미지에서 표 헤더 행을 찾아라 (학기|교과|과목|학점수(또는단위수)|원점수/평균|성취도|석차등급|비고 순서)"
-          + "\n  ② '석차등급' 헤더가 있는 컬럼의 x좌표를 시각적으로 확정하라 — 보통 표의 오른쪽 끝(또는 비고 직전)"
-          + "\n  ③ 각 과목 행에서 '석차등급' 컬럼의 같은 x좌표에 정렬된 숫자만 grade 값으로 추출하라"
-          + "\n  ④ '학점수/단위수' 컬럼(보통 4번째)의 숫자는 절대 grade로 쓰지 말고 units으로만 사용"
-          + "\n  ⑤ 자가검증: 추출한 grade가 같은 행의 원점수와 일관되는가? (원점수 95+ → grade 1~2, 원점수 70 미만 → grade 5+)"
-          + "\n  ⑥ PDF document와 이미지가 동일한 학생부이므로, 둘이 충돌하면 이미지의 시각적 정렬을 우선하라"
-        : "\n\n🔍 [성적 추출] PDF의 '7. 교과학습발달상황' 표를 시각적으로 분석하여 '석차등급' 컬럼 위치를 먼저 찾고, 같은 컬럼의 숫자만 grade로 추출하세요. '학점수/단위수' 컬럼 값은 grade가 아닙니다.";
-
-      // 재추출 모드: 1차에서 잘못 읽은 부분을 구체적으로 지적
-      const retryInstruction = extractMode === "retry"
-        ? "\n\n🚨🚨🚨 [v27 재추출 — 1차 추출 실패 감지] 직전 추출에서 컬럼 오독이 검출되었다. 구체적으로:"
-          + "\n  • 한 학기에서 여러 과목의 grade와 units이 동일한 값으로 추출됨 → 100% 단위수를 등급으로 잘못 읽은 것"
+      if (visionImages.length > 0) {
+        txt += "\n\n🔍🔍🔍 [v27 진짜 Vision OCR] 첨부된 PNG 이미지 " + visionImages.length + "장은 PDF '7. 교과학습발달상황' 섹션이다. 표의 시각적 구조를 직접 보고 분석하라:"
+          + "\n  ① 표 헤더 행을 찾아라 (학기|교과|과목|학점수(또는단위수)|원점수/평균|성취도|석차등급|비고)"
+          + "\n  ② '석차등급' 헤더의 x좌표를 시각적으로 확정하라 — 보통 표의 오른쪽 끝(또는 비고 직전)"
+          + "\n  ③ 각 행에서 '석차등급' 컬럼과 같은 x좌표의 숫자만 grade로 추출하라"
+          + "\n  ④ '학점수/단위수' 컬럼(보통 4번째)의 숫자는 grade가 아니라 units으로만 사용"
+          + "\n  ⑤ 자가검증: grade가 같은 행의 원점수와 일관되는가? (원점수 95+ → grade 1~2, 원점수 70 미만 → grade 5+)"
+          + "\n  ⑥ PDF document와 이미지가 같은 학생부이므로, 충돌 시 이미지 시각 정렬 우선";
+      } else {
+        txt += "\n\n🔍 [성적 추출] PDF의 '7. 교과학습발달상황' 표를 시각적으로 분석하여 '석차등급' 컬럼 위치를 먼저 찾고, 같은 컬럼의 숫자만 grade로 추출하세요. '학점수/단위수' 컬럼 값은 grade가 아닙니다.";
+      }
+      if (mode === "retry") {
+        txt += "\n\n🚨🚨🚨 [v27 자동 재추출 — 1차 추출 실패 감지]"
+          + "\n  • 직전 추출에서 컬럼 오독 검출됨: 한 학기에서 여러 과목의 grade와 units이 동일 = 단위수를 등급으로 잘못 읽음"
           + "\n  • 예: 단위수=4, 등급=1인데 grade:4로 추출됨 → 올바른 값은 grade:1"
-          + "\n  • [재추출 절대 규칙] 이번에는 첨부된 PNG 이미지를 한 행씩 천천히 따라가며 시각적으로 분석하라"
-          + "\n  • 표의 '석차등급' 헤더 위치를 정확히 찾고, 그 컬럼의 숫자만 grade로 사용하라"
-          + "\n  • '학점수' 컬럼(보통 1~5의 작은 정수)과 '석차등급' 컬럼(1~9의 작은 정수)을 헤더 위치로 명확히 구분하라"
-          + "\n  • 원점수가 90+ 인데 grade가 4 이상이면 즉시 의심하고 재확인하라"
-        : "";
-
-      content.push({type:"text", text: baseText + visionInstruction + retryInstruction});
-      return content;
+          + "\n  • [재추출 절대 규칙] 표를 한 행씩 시각적으로 따라가며 분석"
+          + "\n  • '석차등급' 헤더 위치를 정확히 찾고, 그 컬럼의 숫자만 grade로 사용"
+          + "\n  • 원점수가 90+ 인데 grade가 4 이상이면 즉시 의심하고 재확인";
+      }
+      arr.push({ type: "text", text: txt });
+      return arr;
     };
 
-    // ═══════════════════════════════════════════════════════════════
-    // v27: API 호출 함수 (재추출 가능하게 분리)
-    // ═══════════════════════════════════════════════════════════════
-    const callClaudeAPI = async (extractMode) => {
-      const res = await fetch("/api/claude", {
-        method:"POST", headers:{"Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01"},
+    // API 호출 함수 (재추출 가능하게 분리)
+    const callAPI = async function (mode) {
+      const r = await fetch("/api/claude", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
         body: JSON.stringify({
-          model:"claude-sonnet-4-5-20250929",
-          max_tokens:16000,
-          system:sys,
-          messages:[{role:"user", content: buildMessageContent(extractMode)}]
-        }),
+          model: "claude-sonnet-4-5-20250929",
+          max_tokens: 16000,
+          system: sys,
+          messages: [{ role: "user", content: buildMsgContent(mode) }]
+        })
       });
-      const result = await res.json();
-      if (result.error) throw new Error(result.error.message);
-      return result;
+      const j = await r.json();
+      if (j.error) throw new Error(j.error.message);
+      return j;
     };
 
-    // sanity check 함수: 추출 결과에서 컬럼 오독 패턴 검출
-    const detectColumnConfusion = (sgList) => {
+    // 컬럼 오독 패턴 검출 (재추출 트리거)
+    const isColumnConfused = function (sgList) {
       if (!sgList || sgList.length === 0) return false;
-      const bySemester = {};
-      sgList.forEach(s => {
+      const bySem = {};
+      for (let i = 0; i < sgList.length; i++) {
+        const s = sgList[i];
         if (s.year != null && s.semester != null) {
-          const key = `${s.year}-${s.semester}`;
-          (bySemester[key] = bySemester[key] || []).push(s);
+          const key = s.year + "-" + s.semester;
+          if (!bySem[key]) bySem[key] = [];
+          bySem[key].push(s);
         }
-      });
-      let suspectCount = 0;
-      Object.entries(bySemester).forEach(([sem, list]) => {
-        const sameCount = list.filter(s =>
-          s.grade != null && s.units != null &&
-          Number(s.grade) === Number(s.units)
-        ).length;
-        if (sameCount >= 3) suspectCount++;
-      });
-      // 2개 이상의 학기에서 의심 패턴 → 컬럼 오독 확정
-      return suspectCount >= 2;
+      }
+      let suspect = 0;
+      const keys = Object.keys(bySem);
+      for (let i = 0; i < keys.length; i++) {
+        const list = bySem[keys[i]];
+        let same = 0;
+        for (let j = 0; j < list.length; j++) {
+          const s = list[j];
+          if (s.grade != null && s.units != null && Number(s.grade) === Number(s.units)) same++;
+        }
+        if (same >= 3) suspect++;
+      }
+      return suspect >= 2;
     };
 
     try {
-      // 1차 호출
-      console.log("[v27] 1차 분석 시작 " + visionOcrInfo);
-      let result = await callClaudeAPI("primary");
-      let rawTxt = (result.content?.[0]?.text||"")
+      console.log("[v27] 1차 분석 시작 " + visionInfo);
+      const result = await callAPI("primary");
+      const rawTxt = (result.content?.[0]?.text||"")
         .replace(/```json/gi,"").replace(/```/g,"").trim();
-      let jsonStart = rawTxt.indexOf("{");
-      let jsonEnd = rawTxt.lastIndexOf("}");
+      // JSON 블록만 추출 ({ 부터 마지막 } 까지)
+      const jsonStart = rawTxt.indexOf("{");
+      const jsonEnd = rawTxt.lastIndexOf("}");
       if (jsonStart === -1 || jsonEnd === -1) throw new Error("JSON 블록을 찾을 수 없습니다");
       let cleanJson = rawTxt.slice(jsonStart, jsonEnd+1);
-      try { JSON.parse(cleanJson); } catch(e) { cleanJson = repairJson(cleanJson); }
+
+      try {
+        JSON.parse(cleanJson);
+      } catch(parseErr) {
+        cleanJson = repairJson(cleanJson);
+      }
+
       let parsed = JSON.parse(cleanJson);
 
       // ═══════════════════════════════════════════════════════════════
-      // v27: 1차 추출 후 즉시 sanity check → 컬럼 오독 검출 시 자동 재추출
+      // v27: 1차 추출에서 컬럼 오독 검출 시 자동 재추출
       // ═══════════════════════════════════════════════════════════════
-      if (gradeImages.length > 0 && parsed.grades?.subject_grades) {
-        const isConfused = detectColumnConfusion(parsed.grades.subject_grades);
-        if (isConfused) {
+      try {
+        if (parsed && parsed.grades && parsed.grades.subject_grades && isColumnConfused(parsed.grades.subject_grades)) {
           console.warn("[v27] 1차 추출에서 컬럼 오독 감지 → 자동 재추출 시작");
           try {
-            const retryResult = await callClaudeAPI("retry");
+            const retryResult = await callAPI("retry");
             const retryTxt = (retryResult.content?.[0]?.text||"")
               .replace(/```json/gi,"").replace(/```/g,"").trim();
-            const rJsonStart = retryTxt.indexOf("{");
-            const rJsonEnd = retryTxt.lastIndexOf("}");
-            if (rJsonStart !== -1 && rJsonEnd !== -1) {
-              let rCleanJson = retryTxt.slice(rJsonStart, rJsonEnd+1);
-              try { JSON.parse(rCleanJson); } catch(e) { rCleanJson = repairJson(rCleanJson); }
-              const retryParsed = JSON.parse(rCleanJson);
-              // 재추출 결과가 컬럼 오독이 없으면 → 채택
-              if (retryParsed.grades?.subject_grades &&
-                  !detectColumnConfusion(retryParsed.grades.subject_grades)) {
+            const rJStart = retryTxt.indexOf("{");
+            const rJEnd = retryTxt.lastIndexOf("}");
+            if (rJStart !== -1 && rJEnd !== -1) {
+              let rClean = retryTxt.slice(rJStart, rJEnd+1);
+              try { JSON.parse(rClean); } catch(e) { rClean = repairJson(rClean); }
+              const retryParsed = JSON.parse(rClean);
+              if (retryParsed && retryParsed.grades && retryParsed.grades.subject_grades && !isColumnConfused(retryParsed.grades.subject_grades)) {
                 console.log("[v27] 재추출 성공 — 컬럼 오독 해소");
                 parsed = retryParsed;
               } else {
-                console.warn("[v27] 재추출에도 컬럼 오독 지속 — 1차 결과 유지 (sanity 배너 표시)");
+                console.warn("[v27] 재추출에도 컬럼 오독 지속 — 1차 결과 유지");
               }
             }
           } catch(retryErr) {
-            console.warn("[v27] 재추출 실패:", retryErr);
+            console.warn("[v27] 재추출 실패 - 1차 결과 유지:", retryErr);
           }
         }
+      } catch (sanityErr) {
+        console.warn("[v27] sanity check 단계 오류 (무시):", sanityErr);
       }
 
-      // ↓ 이하 기존 v26 후처리 로직 (parsed.grades.subject_grades 정제)
-      // (v27 패치: 위에서 parsed 객체가 이미 준비됨 — 자동 재추출 로직 포함)
       // g값 클렌징: "1등급" → "1", "high" → "-" 등 방어 처리
       if (parsed.grades?.subject_grades) {
         // 2022개정 과목명 → 학년/학기 강제 보정 테이블
@@ -6055,8 +6094,8 @@ const RAILWAY_URL = "https://modenedu-production.up.railway.app";
                 <div style={{marginTop:9,paddingTop:9,borderTop:"1px dashed #FCA5A5",color:"#991B1B",fontSize:11,lineHeight:1.6}}>
                   💡 권장 조치: ① 원본 PDF의 성적표·과목명을 직접 대조 확인 ② 🚀 분석 시작 버튼으로 재분석 ③ 반복 발생 시 PDF 품질(스캔본 여부) 점검
                   <br/>🛡️ <b>v27 안전조치</b>: 의심 등급은 빨간 배너로 알리지만 표시는 그대로 유지. 사용자가 직접 PDF와 대조 검토 권장.
-                  <br/>👁️ <b>v27 진짜 Vision OCR</b>: PDF.js로 성적표 페이지를 PNG 이미지로 변환 후 Claude Vision으로 표 컬럼 정렬 직접 분석.
-                  <br/>🔄 <b>v27 자동 재추출</b>: 1차 추출에서 컬럼 오독(등급=단위수 패턴) 검출 시 강화 프롬프트로 자동 2차 호출.
+                  <br/>👁️ <b>v27 진짜 Vision OCR</b>: PDF.js로 성적표 페이지를 PNG로 변환 후 Claude Vision으로 표 컬럼 직접 분석.
+                  <br/>🔄 <b>v27 자동 재추출</b>: 1차 추출에서 컬럼 오독 검출 시 강화 프롬프트로 자동 2차 호출.
                 </div>
               </div>
             )}
