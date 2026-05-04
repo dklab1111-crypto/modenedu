@@ -4954,7 +4954,7 @@ const RAILWAY_URL = "https://modenedu-production.up.railway.app";
       + "\n\n[major_fit 판정 전용] 목표전공(" + major + ") 기준: 직접 연관=높음, 일반적 연관=중간, 무관=낮음."
       + "\n※ major_fit 판정은 추출된 원문 표현을 바꾸지 않고 점수만 매기는 것. 추출 단계와 완전 분리."
       + "\ngrades 키: summary(문자열), subject_grades(배열)"
-      + "\nsubject_grades 각 항목: {subject:과목명, year:학년(1/2/3), semester:학기(1/2), grade:석차등급(1~9 정수 / 5등급제 과목은 1~5), units:단위수(정수), trend:up/down/stable}"
+      + "\nsubject_grades 각 항목: {subject:과목명, year:학년(1/2/3), semester:학기(1/2), grade:석차등급(1~9 정수 / 5등급제 과목은 1~5), units:단위수(정수), original_score:원점수(정수, '99/77.0(13.7)' 형식에서 첫 숫자), trend:up/down/stable}"
       + "\n⚠️⚠️⚠️ [컬럼 혼동 절대 금지 — 가장 중요] 학생부 성적표 컬럼 순서를 정확히 인식하라:"
       + "\n  ▶ 2015개정 일반과목: 학기|교과|과목|단위수|원점수/과목평균(표준편차)|성취도(수강자수)|석차등급"
       + "\n  ▶ 2022개정 일반과목: 학기|교과|과목|학점수|원점수|성취도(수강자수)|석차등급|비고"
@@ -4964,10 +4964,23 @@ const RAILWAY_URL = "https://modenedu-production.up.railway.app";
       + "\n  ※ '단위수'·'학점수' 컬럼 값을 grade로 절대 입력하지 말 것."
       + "\n  ※ '성취도별분포비율'(예: A(30)B(40)C(30)) 컬럼을 석차등급으로 절대 혼동하지 말 것."
       + "\n  예: 단위수=4, 석차등급=3 → grade:3, units:4 (절대 grade:4가 아님)"
+      + "\n⚠️⚠️ [v26+ — 졸업생 학생부 특수 케이스] 2026년 이후 졸업한 N수생의 학생부는 다음 특징을 가질 수 있다:"
+      + "\n  • 교육과정은 2015개정으로 이수했으나, 출력 형식은 2022개정 헤더('학점수', '비고' 컬럼 포함)일 수 있음"
+      + "\n  • 즉 헤더 텍스트만 보고 교육과정을 판단하지 말 것 — 사용자가 선택한 교육과정(currLabel)을 신뢰하라"
+      + "\n  • '비고' 컬럼이 비어있어도 표 구조는 동일 — 비고 컬럼이 비어있다고 해서 단위수 컬럼을 등급 컬럼으로 오인하지 말 것"
+      + "\n⚠️⚠️ [v26+ — 컬럼 위치 절대 규칙] 표 컬럼이 7개 이상인 경우:"
+      + "\n  • '학점수/단위수'는 항상 4번째 컬럼"
+      + "\n  • '석차등급'은 항상 '성취도(수강자수)' 다음 + '비고' 직전 컬럼 (보통 7번째)"
+      + "\n  • 4번째와 7번째 컬럼을 절대 혼동하지 말 것"
+      + "\n⚠️⚠️ [v26+ — 원점수-등급 일관성 검증 필수] 추출 후 다음을 자가검증:"
+      + "\n  • 원점수가 90점 이상인데 grade가 4 이상이면 → 100% 컬럼 오독. 재추출 필요."
+      + "\n  • 원점수가 99점인데 grade가 4면, 학점수(=4)를 등급으로 잘못 읽은 것이 명백함."
+      + "\n  • 일반적으로 원점수 95+ → grade 1, 85~94 → grade 2~3, 70~84 → grade 3~5, 70 미만 → grade 5+"
       + "\n[컬럼 혼동 자가검증 필수] 추출 후 다음 sanity check를 반드시 통과해야 한다:"
       + "\n  ① 한 과목 행에서 grade와 units이 같은 값이면(예: grade:4, units:4) → 컬럼 오독 의심 → 재확인"
       + "\n  ② 한 학생의 모든 과목 평균이 정확히 정수(4.00, 3.00 등)에 가깝게 균일하면 → 단위수를 등급으로 잘못 읽은 것 → 처음부터 재추출"
       + "\n  ③ 국어·수학·영어가 모두 동일한 grade를 갖고 그 값이 단위수(보통 4)와 같다면 → 99% 컬럼 오독"
+      + "\n  ④ [v26+] 원점수와 grade가 모순되면(예: 원점수 99 vs grade 4) → 즉시 재추출"
       + "\n⚠️ [1학기·2학기 병합 금지] 국어·수학·영어 등 양 학기 모두 수강하는 과목은 반드시 1학기(semester:1)와 2학기(semester:2) 두 개 항목으로 분리 추출. 동일 과목을 단위수 합산(예: units:8)한 단일 항목으로 합치는 것은 오류다. 예: 국어 1학기 4단위+2학기 4단위 → {subject:'국어',year:1,semester:1,units:4,...}, {subject:'국어',year:1,semester:2,units:4,...} 두 항목이 맞음."
       + "\n⚠️⚠️ [성적 추출 최우선] 성적표 데이터가 가장 중요합니다. 반드시 모든 과목의 석차등급을 추출하세요. 빈 등급란도 해당 과목 행이 실제로 있으면 포함하세요."
       + "\n⚠️ [페이지 분리 주의] 성적표 테이블은 PDF 페이지 경계에서 잘릴 수 있다. 다음 페이지에서 표 헤더 없이 과목 행이 이어지면 이전 페이지와 동일한 학년·학기 테이블이 계속되는 것이므로 반드시 포함. 어떤 과목도 누락하지 말 것."
@@ -5180,6 +5193,54 @@ const RAILWAY_URL = "https://modenedu-production.up.railway.app";
         if (foundSuspicious.size > 0) {
           const items = [...foundSuspicious].map(s => `'${s}' → ${SUBJECT_HINT_MAP[s]||"비표준 과목명"}`);
           sanityWarnings.push(`⚠️ 비표준 과목명 발견: ${items.join(", ")} — PDF 글꼴 인식 오류 가능성 높음`);
+        }
+        // ─────────────────────────────────────────────────────────
+        // v26+: [Check 5] 원점수-등급 일관성 검증
+        // ─────────────────────────────────────────────────────────
+        let scoreGradeMismatchCount = 0;
+        const mismatchSubjects = [];
+        sgList.forEach(s => {
+          const score = parseFloat(s.original_score);
+          const grade = parseFloat(s.grade);
+          if (!isNaN(score) && !isNaN(grade)) {
+            // 원점수 95+인데 grade 4+ 인 명백한 모순
+            if (score >= 95 && grade >= 4) {
+              scoreGradeMismatchCount++;
+              mismatchSubjects.push(`${s.subject}(원점수${score}/등급${grade})`);
+              s._score_grade_mismatch = true;
+            }
+            // 원점수 85+인데 grade 5+ 인 모순
+            else if (score >= 85 && grade >= 5) {
+              scoreGradeMismatchCount++;
+              mismatchSubjects.push(`${s.subject}(원점수${score}/등급${grade})`);
+              s._score_grade_mismatch = true;
+            }
+          }
+        });
+        if (scoreGradeMismatchCount > 0) {
+          sanityWarnings.push(`🚨 원점수-등급 모순: ${mismatchSubjects.slice(0,5).join(", ")}${mismatchSubjects.length>5?` 외 ${mismatchSubjects.length-5}개`:''} — 원점수가 높은데 등급이 낮음 → 컬럼 오독 확정`);
+        }
+        // ─────────────────────────────────────────────────────────
+        // v26+: [Action] sanity 의심값 자동 마스킹 (grade=units 동일 + 원점수 모순)
+        // 잘못된 숫자가 사용자에게 노출되는 것을 차단
+        // ─────────────────────────────────────────────────────────
+        let maskedCount = 0;
+        sgList.forEach(s => {
+          const isSuspicious =
+            // 케이스 1: grade === units (컬럼 오독 강한 신호)
+            (s.grade != null && s.units != null && s.grade !== "-" && s.units !== "-" &&
+             Number(s.grade) === Number(s.units) && Number(s.grade) >= 3) ||
+            // 케이스 2: 원점수-등급 모순
+            s._score_grade_mismatch === true;
+          if (isSuspicious) {
+            s._original_grade = s.grade;  // 원본 보존 (디버깅용)
+            s.grade = null;
+            s._suspicious = true;
+            maskedCount++;
+          }
+        });
+        if (maskedCount > 0) {
+          sanityWarnings.push(`🛡️ 안전조치: ${maskedCount}개 과목의 의심 등급값을 마스킹(미표시)했습니다 — 잘못된 숫자가 평균에 반영되지 않도록 차단`);
         }
       }
       if (sanityWarnings.length > 0) {
@@ -5767,6 +5828,7 @@ const RAILWAY_URL = "https://modenedu-production.up.railway.app";
                 ))}
                 <div style={{marginTop:9,paddingTop:9,borderTop:"1px dashed #FCA5A5",color:"#991B1B",fontSize:11,lineHeight:1.6}}>
                   💡 권장 조치: ① 원본 PDF의 성적표·과목명을 직접 대조 확인 ② 🚀 분석 시작 버튼으로 재분석 ③ 반복 발생 시 PDF 품질(스캔본 여부) 점검
+                  <br/>🛡️ <b>v26 안전조치</b>: 의심 등급은 자동으로 "—"로 표시되며 평균 계산에서 제외됩니다 (잘못된 정보 차단).
                 </div>
               </div>
             )}
